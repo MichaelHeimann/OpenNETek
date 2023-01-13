@@ -3,6 +3,7 @@
 #include <SPIFFS.h>
 #include "NETSGPClient.h"
 #include <Arduino.h>
+#include <WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiManager.h>
 #include <AsyncTCP.h>
@@ -19,12 +20,13 @@ char mqtt_server[40];  //mqtt Broker ip
 uint16_t mqtt_port;  //mqtt Broker port
 char mqtt_user[32];         //mqtt Username
 char mqtt_password[32];     //mqtt Password
-//Optionen End
+//uint32_t inverterID = 0x38004044; /// Identifier of your inverter (see label on inverter)
+uint32_t inverterID = 0x18CBA80; /// Identifier of your inverter (see label on inverter)
 
+//Optionen End
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
-
 // Create an Event Source on /events
 AsyncEventSource events("/events");
 
@@ -115,22 +117,22 @@ void recvMsg(uint8_t *data, size_t len){
   }
 }
 
-constexpr const uint8_t PROG_PIN = 4; /// Programming enable pin of RF module
-constexpr const uint8_t RX_PIN = 17; /// RX pin of RF module
-constexpr const uint8_t TX_PIN = 16; /// TX pin of RF module
-constexpr const uint32_t inverterID = 0x38004044; /// Identifier of your inverter (see label on inverter)
+constexpr const uint8_t PROG_PIN = 4; /// Programming enable pin of RF module (needed?)
+constexpr const uint8_t RX_PIN = 16; /// RX pin (of RF module)
+constexpr const uint8_t TX_PIN = 17; /// TX pin (of RF module)
+//constexpr const uint32_t inverterID = 0x38004044; /// Identifier of your inverter (see label on inverter)
 
 
 
 
 
-NETSGPClient client(Serial2, PROG_PIN); /// NETSGPClient instance
+NETSGPClient pvclient(Serial2, PROG_PIN); /// NETSGPClient instance
 
 
 
 String processor(const String& var){
   {
-  const NETSGPClient::InverterStatus status = client.getStatus(inverterID);
+  const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
   if (status.valid){
     //Serial.println(var);
     if(var == "DC_Voltage"){
@@ -273,7 +275,7 @@ void setup()
 
     //read configuration from FS json
     Serial.println("mounting FS...");
-
+    
     if (SPIFFS.begin()) {
       Serial.println("mounted file system");
       if (SPIFFS.exists("/config.json")) {
@@ -294,78 +296,104 @@ void setup()
             Serial.println("\nparsed json");
 
             strcpy(mqtt_server, json["mqtt_server"]);
+            Serial.print("mqtt_server = ");
+            Serial.println(mqtt_server);
             mqtt_port = strtol(json["mqtt_port"],NULL,10);
+            Serial.print("mqtt_port = ");
+            Serial.println(mqtt_port,10);
             strcpy(mqtt_user, json["mqtt_user"]);
+            Serial.print("mqtt_user = ");
+            Serial.println(mqtt_user);
             strcpy(mqtt_password, json["mqtt_password"]);
+            Serial.print("mqtt_password = ");
+            Serial.println(mqtt_password);
+            inverterID = strtol(json["custom_inverterID"],NULL,10);
+            Serial.print("inverterID = ");
+            Serial.println(inverterID,16);
 
           } else {
             Serial.println("failed to load json config");
           }
         }
+      } else {
+        // lets get wifimanager to get us some config
+
+        // WifiManager stuff
+        WiFiManager wifiManager;
+        // uncomment to delete WiFi settings after each Reset.
+        wifiManager.resetSettings();
+        wifiManager.setDebugOutput(true);
+        WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
+        WiFiManagerParameter custom_mqtt_port("port", "mqtt port", "1883", 6);
+        WiFiManagerParameter custom_mqtt_user("user", "mqtt user", mqtt_user, 32);
+        WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 32);
+        WiFiManagerParameter custom_inverterID("InverterID", "InverterID","" , 8); // as printed on the label of the inverter which is in Hex
+        wifiManager.addParameter(&custom_mqtt_server);
+        wifiManager.addParameter(&custom_mqtt_port);
+        wifiManager.addParameter(&custom_mqtt_user);
+        wifiManager.addParameter(&custom_mqtt_password);
+        wifiManager.addParameter(&custom_inverterID);
+        
+        wifiManager.autoConnect("OpenDTU", "opendtu!");
+        strcpy (mqtt_server, custom_mqtt_server.getValue() );
+        mqtt_port = strtol(custom_mqtt_port.getValue(),NULL,10);
+        strcpy (mqtt_user, custom_mqtt_user.getValue() );
+        strcpy (mqtt_password, custom_mqtt_password.getValue() );
+        inverterID = strtol(custom_inverterID.getValue(),NULL,16);
+        Serial.print("saving inverterID as ");
+        Serial.print(inverterID,16);
+        wifiManager.server.release();
+
+        // save the custom parameters to FS
+        Serial.println("saving config");
+        DynamicJsonBuffer jsonBuffer;
+        JsonObject& json = jsonBuffer.createObject();
+        json["mqtt_server"] = mqtt_server;
+        json["mqtt_port"] = mqtt_port;
+        json["mqtt_user"] = mqtt_user;
+        json["mqtt_password"] = mqtt_password;
+        json["custom_inverterID"] = inverterID;
+
+        File configFile = SPIFFS.open("/config.json", "w");
+        if (!configFile) {
+          Serial.println("failed to open config file for writing");
+        }
+
+        json.printTo(Serial);
+        json.printTo(configFile);
+        configFile.close();
+        //end save
+
+        // restart to free up port 80 and avoid AsyncTCP.cpp:1268] begin(): bind error: -8
+        // In Debug Scenario with config reset at the beginning this needs to be uncommented.
+        ESP.restart();
       }
+
     } else {
       Serial.println("failed to mount FS");
-    }
-  //end read
-    // WifiManager stuff
-    WiFiManager wifiManager;
-    // uncomment to delete WiFi & MQTT settings after each Reset.
-    //wifiManager.resetSettings();
-    wifiManager.setDebugOutput(true);
-    WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
-    WiFiManagerParameter custom_mqtt_port("port", "mqtt port", "1883", 6);
-    WiFiManagerParameter custom_mqtt_user("user", "mqtt user", mqtt_user, 32);
-    WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 32);
-    wifiManager.addParameter(&custom_mqtt_server);
-    wifiManager.addParameter(&custom_mqtt_port);
-    wifiManager.addParameter(&custom_mqtt_user);
-    wifiManager.addParameter(&custom_mqtt_password);
-    //wifiManager.setHttpPort(81);
-    wifiManager.autoConnect("OpenDTU", "opendtu!");
-    strcpy (mqtt_server, custom_mqtt_server.getValue() );
-    mqtt_port = strtol(custom_mqtt_port.getValue(),NULL,10);
-    strcpy (mqtt_user, custom_mqtt_user.getValue() );
-    strcpy (mqtt_password, custom_mqtt_password.getValue() );
-    //wifiManager.server.release();
-
-
-
-    // save the custom parameters to FS
-      Serial.println("saving config");
-      DynamicJsonBuffer jsonBuffer;
-      JsonObject& json = jsonBuffer.createObject();
-      json["mqtt_server"] = mqtt_server;
-      json["mqtt_port"] = mqtt_port;
-      json["mqtt_user"] = mqtt_user;
-      json["mqtt_password"] = mqtt_password;
-
-      File configFile = SPIFFS.open("/config.json", "w");
-      if (!configFile) {
-        Serial.println("failed to open config file for writing");
+      Serial.println("Trying to format...");
+      if (SPIFFS.format()) {
+        Serial.println("Formatting successful! Restarting...");
+        ESP.restart();
+      } else {
+        Serial.println("Formatting not successful!");
       }
-
-      json.printTo(Serial);
-      json.printTo(configFile);
-      configFile.close();
-      //end save
-    
+    }
+    // connect to saved Wifi
+    WiFi.begin();
     delay(2000);
-    
 
-    //pinMode(LED_BUILTIN, OUTPUT);
-     Serial.println("Welcome to Micro Inverter Interface by ATCnetz.de and enwi.one");
+    
+    // Serial.println("Welcome to Micro Inverter Interface by ATCnetz.de and enwi.one");
 
     // WebSerial is accessible at "<IP Address>/webserial" in browser
     WebSerial.begin(&server);
     WebSerial.msgCallback(recvMsg);
 
-  
-
-
- // Handle Web Server
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    //request->send_P(200, "text/html", index_html, processor);
-    request->send(200, "text/html", index_html);
+    // Handle Web Server - crashes when there are no values - TBD
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", index_html, processor);
+    //request->send(200, "text/html", index_html);
   });
 
   // Handle Web Server Events
@@ -382,15 +410,17 @@ void setup()
   
   server.begin();
 
+  if ( sizeof(mqtt_server) ) {
+    mqtt.setServer(mqtt_server, mqtt_port);
+    mqtt.setCallback(callback);
+   (mqtt.connect("PV", mqtt_user, mqtt_password));
 
-  mqtt.setServer(mqtt_server, mqtt_port);
-  mqtt.setCallback(callback);
- (mqtt.connect("PV", mqtt_user, mqtt_password));
-
+  }
+  
 
 
     // Make sure the RF module is set to the correct settings
-//    if (!client.setDefaultRFSettings())
+//    if (!pvclient.setDefaultRFSettings())
 //    {
 //        Serial.println("Could not set RF module to default settings");
 //    }
@@ -403,158 +433,179 @@ uint32_t lastSendMillis = 0;
 void loop()
 {
 
-  
-    const uint32_t currentMillis = millis();
-    if (currentMillis - lastSendMillis > 2000)
-    {
-        lastSendMillis = currentMillis;
-        
-        //digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-        //WebSerial.println("");
-        Serial.println("Sending request now...");
-        delay(2000);
-
-        const NETSGPClient::InverterStatus status = client.getStatus(inverterID);
-        if (status.valid)
-        {
-            WebSerial.println("*********************************************");
-            WebSerial.println("Received Inverter Status");
-            WebSerial.print("Device: ");
-            //WebSerial.println(status.deviceID, HEX);
-            WebSerial.println("Status: " + String(status.state));
-            WebSerial.println("DC_Voltage: " + String(status.dcVoltage) + "V");
-            WebSerial.println("DC_Current: " + String(status.dcCurrent) + "A");
-            WebSerial.println("DC_Power: " + String(status.dcPower) + "W");
-            WebSerial.println("AC_Voltage: " + String(status.acVoltage) + "V");
-            WebSerial.println("AC_Current: " + String(status.acCurrent) + "A");
-            WebSerial.println("AC_Power: " + String(status.acPower) + "W");
-            WebSerial.println("Power gen total: " + String(status.totalGeneratedPower));
-            WebSerial.println("Temperature: " + String(status.temperature));
-            // print Status to Serial for Debug
-            Serial.println("*********************************************");
-            Serial.println("Received Inverter Status");
-            Serial.print("Device: ");
-            Serial.println(status.deviceID, HEX);
-            Serial.println("Status: " + String(status.state));
-            Serial.println("DC_Voltage: " + String(status.dcVoltage) + "V");
-            Serial.println("DC_Current: " + String(status.dcCurrent) + "A");
-            Serial.println("DC_Power: " + String(status.dcPower) + "W");
-            Serial.println("AC_Voltage: " + String(status.acVoltage) + "V");
-            Serial.println("AC_Current: " + String(status.acCurrent) + "A");
-            Serial.println("AC_Power: " + String(status.acPower) + "W");
-            Serial.println("Power gen total: " + String(status.totalGeneratedPower));
-            Serial.println("Temperature: " + String(status.temperature));
-            delay(2000);
-        }
-        else{
-          Serial.println("Received no Inverter Status");
-        }
-    }
+const uint32_t currentMillis = millis();
+if (currentMillis - lastSendMillis > 2000)
+  {
+  lastSendMillis = currentMillis;
     
+  //digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+  //WebSerial.println("");
+  Serial.print("Sending request now to InverterID ");
+  Serial.println(inverterID,16);
+  WebSerial.print("Sending request now to InverterID (shown as as decimal) ");
+  WebSerial.println(inverterID);
+
+  // was 2000
+  delay(2000);
+
+  const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
+  
+  if (status.valid)
     {
-    const NETSGPClient::InverterStatus status = client.getStatus(inverterID);
-    if (status.valid)
+    WebSerial.println("*********************************************");
+    WebSerial.println("Received Inverter Status");
+    WebSerial.print("Device (shown as as decimal): ");
+    WebSerial.println(inverterID);
+    WebSerial.println("Status: " + String(status.state));
+    WebSerial.println("DC_Voltage: " + String(status.dcVoltage) + "V");
+    WebSerial.println("DC_Current: " + String(status.dcCurrent) + "A");
+    WebSerial.println("DC_Power: " + String(status.dcPower) + "W");
+    WebSerial.println("AC_Voltage: " + String(status.acVoltage) + "V");
+    WebSerial.println("AC_Current: " + String(status.acCurrent) + "A");
+    WebSerial.println("AC_Power: " + String(status.acPower) + "W");
+    WebSerial.println("Power gen total: " + String(status.totalGeneratedPower));
+    WebSerial.println("Temperature: " + String(status.temperature));
+    // print Status to Serial for Debug
+    Serial.println("*********************************************");
+    Serial.println("Received Inverter Status");
+    Serial.print("Device: ");
+    Serial.println(status.deviceID, HEX);
+    Serial.println("Status: " + String(status.state));
+    Serial.println("DC_Voltage: " + String(status.dcVoltage) + "V");
+    Serial.println("DC_Current: " + String(status.dcCurrent) + "A");
+    Serial.println("DC_Power: " + String(status.dcPower) + "W");
+    Serial.println("AC_Voltage: " + String(status.acVoltage) + "V");
+    Serial.println("AC_Current: " + String(status.acCurrent) + "A");
+    Serial.println("AC_Power: " + String(status.acPower) + "W");
+    Serial.println("Power gen total: " + String(status.totalGeneratedPower));
+    Serial.println("Temperature: " + String(status.temperature));
+    delay(2000);
+    }
+  else
+    {
+    Serial.print("Received no Inverter Status from ");
+    Serial.println(inverterID,16);
+
+    WebSerial.print("Received no Inverter Status from ");
+    
+    WebSerial.println(inverterID);
+    }
+  }
+  
+  {
+  const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
+
+  if (status.valid)
+    {
+    // Send Events to the Web Server with the Sensor Readings
+    events.send("ping",NULL,millis());
+    events.send(String(status.dcVoltage).c_str(),"DC_Voltage",millis());
+    events.send(String(status.dcCurrent).c_str(),"DC_Current",millis());
+    events.send(String(status.dcPower).c_str(),"DC_Power",millis());
+    events.send(String(status.acVoltage).c_str(),"AC_Voltage",millis());
+    events.send(String(status.acCurrent).c_str(),"AC_Current",millis());
+    events.send(String(status.acPower).c_str(),"AC_Power",millis());
+    events.send(String(status.temperature).c_str(),"Temperature",millis());
+    events.send(String(status.totalGeneratedPower).c_str(),"Power_gen_total",millis());
+    events.send(String(status.state).c_str(),"Status",millis());
+    delay(5000);
+    
+    
+
+    if ( sizeof(mqtt_server) ) 
       {
-      // Send Events to the Web Server with the Sensor Readings
-      events.send("ping",NULL,millis());
-      events.send(String(status.dcVoltage).c_str(),"DC_Voltage",millis());
-      events.send(String(status.dcCurrent).c_str(),"DC_Current",millis());
-      events.send(String(status.dcPower).c_str(),"DC_Power",millis());
-      events.send(String(status.acVoltage).c_str(),"AC_Voltage",millis());
-      events.send(String(status.acCurrent).c_str(),"AC_Current",millis());
-      events.send(String(status.acPower).c_str(),"AC_Power",millis());
-      events.send(String(status.temperature).c_str(),"Temperature",millis());
-      events.send(String(status.totalGeneratedPower).c_str(),"Power_gen_total",millis());
-      events.send(String(status.state).c_str(),"Status",millis());
-      delay(5000);
+      if (!mqtt.connected()) 
+        {
+        Serial.println("MQTT not connected. Reconecting...");
+        reconnect();
+        }
+      mqtt.loop();
+
+      long now = millis();
+      if (now - lastMsg > 5000) 
+        {
+        lastMsg = now;
+        
+          // Temperature in Celsius
+          {
+          const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
+        
+          // Uncomment the next line to set temperature in Fahrenheit 
+          // (and comment the previous temperature line)
+          //temperature = 1.8 * bme.readTemperature() + 32; // Temperature in Fahrenheit
+          
+          // Convert the value to a char array
+          dcVoltage1 = (status.dcVoltage);
+          char dcVoltage[8];
+          dtostrf(dcVoltage1, 1, 2, dcVoltage);
+          //Serial.print("Mqtt-dcVoltage: ");
+          //Serial.println(dcVoltage);
+          mqtt.publish("pv1/dcVoltage", dcVoltage);
+
+          dcCurrent1 = (status.dcCurrent);
+          char dcCurrent[8];
+          dtostrf(dcCurrent1, 1, 2, dcCurrent);
+          //Serial.print("Mqtt-dcCurrent: ");
+          //Serial.println(dcCurrent);
+          mqtt.publish("pv1/dcCurrent", dcCurrent);
+
+          dcPower1 = (status.dcPower);
+          char dcPower[8];
+          dtostrf(dcPower1, 1, 2, dcPower);
+          //Serial.print("Mqtt-dcPower: ");
+          //Serial.println(dcPower);
+          mqtt.publish("pv1/dcPower", dcPower);
+
+          acVoltage1 = (status.acVoltage);
+          char acVoltage[8];
+          dtostrf(acVoltage1, 1, 2, acVoltage);
+          //Serial.print("Mqtt-acVoltage: ");
+          //Serial.println(acVoltage);
+          mqtt.publish("pv1/acVoltage", acVoltage);
+
+          acCurrent1 = (status.acCurrent);
+          char acCurrent[8];
+          dtostrf(acCurrent1, 1, 2, acCurrent);
+          //Serial.print("Mqtt-acCurrent: ");
+          //Serial.println(acCurrent);
+          mqtt.publish("pv1/acCurrent", acCurrent);
+
+          acPower1 = (status.acPower);
+          char acPower[8];
+          dtostrf(acPower1, 1, 2, acPower);
+          //Serial.print("Mqtt-acPower: ");
+          //Serial.println(acPower);
+          mqtt.publish("pv1/acPower", acPower);
+
+          temperature = (status.temperature);
+          char tempString[8];
+          dtostrf(temperature, 1, 2, tempString);
+          //Serial.print("Mqtt-Temperature: ");
+          //Serial.println(tempString);
+          mqtt.publish("pv1/temperature", tempString);
+
+          totalGeneratedPower1 = (status.totalGeneratedPower);
+          char totalGeneratedPower[8];
+          dtostrf(totalGeneratedPower1, 1, 2, totalGeneratedPower);
+          //Serial.print("Mqtt-totalGeneratedPower: ");
+          //Serial.println(totalGeneratedPower);
+          mqtt.publish("pv1/totalGeneratedPower", totalGeneratedPower);
+
+          state1 = (status.state);
+          char state[8];
+          dtostrf(state1, 1, 2, state);
+          //Serial.print("Mqtt-state: ");
+          //Serial.println(state);
+          mqtt.publish("pv1/state", state);
+          
+          int len = String(inverterID).length();
+          char cStr[len+1];
+          itoa (inverterID, cStr, 10);
+          mqtt.publish("pv1/inverterID", cStr);
+          }   
+
+        }
       }
     }
-
-
-if (!mqtt.connected()) {
-    Serial.println("MQTT not connected. Reconecting...");
-    reconnect();
-  }
-  mqtt.loop();
-
-  long now = millis();
-  if (now - lastMsg > 5000) {
-    lastMsg = now;
-    
-    // Temperature in Celsius
-     {
-const NETSGPClient::InverterStatus status = client.getStatus(inverterID);
-   
-    
-    
-    // Uncomment the next line to set temperature in Fahrenheit 
-    // (and comment the previous temperature line)
-    //temperature = 1.8 * bme.readTemperature() + 32; // Temperature in Fahrenheit
-    
-    // Convert the value to a char array
-    dcVoltage1 = (status.dcVoltage);
-    char dcVoltage[8];
-    dtostrf(dcVoltage1, 1, 2, dcVoltage);
-    //Serial.print("Mqtt-dcVoltage: ");
-    //Serial.println(dcVoltage);
-    mqtt.publish("pv1/dcVoltage", dcVoltage);
-
-    dcCurrent1 = (status.dcCurrent);
-    char dcCurrent[8];
-    dtostrf(dcCurrent1, 1, 2, dcCurrent);
-    //Serial.print("Mqtt-dcCurrent: ");
-    //Serial.println(dcCurrent);
-    mqtt.publish("pv1/dcCurrent", dcCurrent);
-
-    dcPower1 = (status.dcPower);
-    char dcPower[8];
-    dtostrf(dcPower1, 1, 2, dcPower);
-    //Serial.print("Mqtt-dcPower: ");
-    //Serial.println(dcPower);
-    mqtt.publish("pv1/dcPower", dcPower);
-
-    acVoltage1 = (status.acVoltage);
-    char acVoltage[8];
-    dtostrf(acVoltage1, 1, 2, acVoltage);
-    //Serial.print("Mqtt-acVoltage: ");
-    //Serial.println(acVoltage);
-    mqtt.publish("pv1/acVoltage", acVoltage);
-
-    acCurrent1 = (status.acCurrent);
-    char acCurrent[8];
-    dtostrf(acCurrent1, 1, 2, acCurrent);
-    //Serial.print("Mqtt-acCurrent: ");
-    //Serial.println(acCurrent);
-    mqtt.publish("pv1/acCurrent", acCurrent);
-
-    acPower1 = (status.acPower);
-    char acPower[8];
-    dtostrf(acPower1, 1, 2, acPower);
-    //Serial.print("Mqtt-acPower: ");
-    //Serial.println(acPower);
-    mqtt.publish("pv1/acPower", acPower);
-
-    temperature = (status.temperature);
-    char tempString[8];
-    dtostrf(temperature, 1, 2, tempString);
-    //Serial.print("Mqtt-Temperature: ");
-    //Serial.println(tempString);
-    mqtt.publish("pv1/temperature", tempString);
-
-    totalGeneratedPower1 = (status.totalGeneratedPower);
-    char totalGeneratedPower[8];
-    dtostrf(totalGeneratedPower1, 1, 2, totalGeneratedPower);
-    //Serial.print("Mqtt-totalGeneratedPower: ");
-    //Serial.println(totalGeneratedPower);
-    mqtt.publish("pv1/totalGeneratedPower", totalGeneratedPower);
-
-    state1 = (status.state);
-    char state[8];
-    dtostrf(state1, 1, 2, state);
-    //Serial.print("Mqtt-state: ");
-    //Serial.println(state);
-    mqtt.publish("pv1/state", state);
-    }   
-
   }
 }
