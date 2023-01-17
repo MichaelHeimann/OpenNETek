@@ -26,3 +26,5 @@ I suggest using an ESP32 with the possibility to connect an external antenna. Th
 I used an ESP32 WROOM 32U.
 
 Beware: some ESP32 with external antenna socket and internal antenna need hardware modification to "switch" to the external antenna.
+
+<a href="https://www.buymeacoffee.com/Highman" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
