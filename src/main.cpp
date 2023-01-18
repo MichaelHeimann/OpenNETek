@@ -334,7 +334,7 @@ void setup()
         wifiManager.addParameter(&custom_mqtt_password);
         wifiManager.addParameter(&custom_inverterID);
         
-        wifiManager.autoConnect("OpenDTU", "opendtu!");
+        wifiManager.autoConnect("OpenNETek", "opennetek!");
         strcpy (mqtt_server, custom_mqtt_server.getValue() );
         mqtt_port = strtol(custom_mqtt_port.getValue(),NULL,10);
         strcpy (mqtt_user, custom_mqtt_user.getValue() );

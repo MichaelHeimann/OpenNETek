@@ -18,7 +18,7 @@ Hardware:
 
 Configuration:
 * after connecting DC power to the inverter, the ESP32 initializes
-* after a minute or so: connect to SSID:OpenDTU Pass:opendtu!
+* after a minute or so: connect to SSID:OpenNETek Pass:opennetek!
 * a captive portal pops up and you can enter wifi, mqtt details and the inverterid from the chassis
 * after that, the inverter publishes performance data via mqtt and http
 
