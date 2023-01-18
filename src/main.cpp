@@ -8,7 +8,7 @@
 #include <WiFiManager.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include <WebSerial.h>
+//#include <WebSerial.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h> 
 #define LED 2
@@ -22,6 +22,9 @@ char mqtt_user[32];         //mqtt Username
 char mqtt_password[32];     //mqtt Password
 //uint32_t inverterID = 0x38004044; /// Identifier of your inverter (see label on inverter)
 uint32_t inverterID = 0x18CBA80; /// Identifier of your inverter (see label on inverter)
+
+
+//
 
 //Optionen End
 
@@ -103,12 +106,12 @@ void reconnect() {
 }
 
 void recvMsg(uint8_t *data, size_t len){
-  WebSerial.println("Received Data...");
+  //WebSerial.println("Received Data...");
   String d = "";
   for(int i=0; i < len; i++){
     d += char(data[i]);
   }
-  WebSerial.println(d);
+  //WebSerial.println(d);
   if (d == "ON"){
     digitalWrite(LED, HIGH);
   }
@@ -132,41 +135,39 @@ NETSGPClient pvclient(Serial2, PROG_PIN); /// NETSGPClient instance
 
 String processor(const String& var){
   {
-  const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
-  if (status.valid){
-    //Serial.println(var);
-    if(var == "DC_Voltage"){
-      return String(status.dcVoltage);
-      }
-    if(var == "DC_Current"){
-      return String(status.dcCurrent);
-      }
-    if(var == "DC_Power"){
-      return String(status.dcPower);
-      }
-    if(var == "AC_Voltage"){
-      return String(status.acVoltage);
-      }
-    if(var == "AC_Current"){
-      return String(status.acCurrent);
-      }
-    if(var == "AC_Power"){
-      return String(status.acPower);
-      }
-    if(var == "Temperature"){
-      return String(status.temperature);
-      }
-    if(var == "Power_gen_total"){
-      return String(status.totalGeneratedPower);
-      }
-    if(var == "Status"){
-      return String(status.state);
-      }
-    if(var == "Status"){
-      return String(0);
-      }
-  }
-  return String("");
+  Serial.println("processor called");
+
+  //Serial.println("Inverter function returned");
+  if(var == "DC_Voltage"){
+    return String(dcVoltage1);
+    }
+  if(var == "DC_Current"){
+    return String(dcCurrent1);
+    }
+  if(var == "DC_Power"){
+    return String(dcPower1);
+    }
+  if(var == "AC_Voltage"){
+    return String(acVoltage1);
+    }
+  if(var == "AC_Current"){
+    return String(acCurrent1);
+    }
+  if(var == "AC_Power"){
+    return String(acPower1);
+    }
+  if(var == "Temperature"){
+    return String(temperature1);
+    }
+  if(var == "Power_gen_total"){
+    return String(totalGeneratedPower1);
+    }
+  if(var == "Status"){
+    return String(state1);
+    }
+
+  //Serial.println("default catchall return is coming...");
+  return String();
   }
 }
 
@@ -174,10 +175,10 @@ String processor(const String& var){
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
 <head>
-  <title>PV Smart Inverter</title>
+  <title>OpenNETek</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="20">
-  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.2.1/css/all.css" integrity="sha384-twcuYPV86B3vvpwNhWJuaLdUSLF9+ttgM2A6M870UYXrOsxKfER2MKox5cirApyA" crossorigin="anonymous">  
   <link rel="icon" href="data:,">
   <style>
     html {font-family: Arial; display: inline-block; text-align: center;}
@@ -192,36 +193,36 @@ const char index_html[] PROGMEM = R"rawliteral(
 </head>
 <body>
   <div class="topnav">
-    <h1>PV Smart Inverter</h1>
+    <h1>OpenNETek</h1>
   </div>
   <div class="content">
     <div class="cards">
       <div class="card">
-        <p><i class="fas fa-angle-double-down" style="color:#e1e437;"></i> DC_Voltage</p><p><span class="reading"><span id="DC_Voltage">%DC_Voltage%</span> V</span></p>
+        <p><i class="fa-solid fa-solar-panel" style="color:#e1e437;"></i> DC_Voltage</p><p><span class="reading"><span id="DC_Voltage">%DC_Voltage%</span> V</span></p>
       </div>
       <div class="card">
-        <p><i class="fas fa-angle-double-down" style="color:#e1e437;"></i> DC_Current</p><p><span class="reading"><span id="hum">%DC_Current%</span> A</span></p>
+        <p><i class="fa-solid fa-solar-panel" style="color:#e1e437;"></i> DC_Current</p><p><span class="reading"><span id="DC_Current">%DC_Current%</span> A</span></p>
       </div>
       <div class="card">
-        <p><i class="fas fa-angle-double-down" style="color:#e1e437;"></i> DC_Power</p><p><span class="reading"><span id="pres">%DC_Power%</span> W</span></p>
-      </div>
-            <div class="card">
-        <p><i class="fas fa-angle-double-up" style="color:#059e8a;"></i> AC_Voltage</p><p><span class="reading"><span id="temp">%AC_Voltage%</span> V</span></p>
+        <p><i class="fa-solid fa-solar-panel" style="color:#e1e437;"></i> DC_Power</p><p><span class="reading"><span id="DC_Power">%DC_Power%</span> W</span></p>
       </div>
       <div class="card">
-        <p><i class="fas fa-angle-double-up" style="color:#059e8a;"></i> AC_Current</p><p><span class="reading"><span id="hum">%AC_Current%</span> A</span></p>
+        <p><i class="fa-solid fa-plug-circle-bolt" style="color:#059e8a;"></i> AC_Voltage</p><p><span class="reading"><span id="AC_Voltage">%AC_Voltage%</span> V</span></p>
       </div>
       <div class="card">
-        <p><i class="fas fa-angle-double-up" style="color:#059e8a;"></i> AC_Power</p><p><span class="reading"><span id="pres">%AC_Power%</span> W</span></p>
-      </div>
-             <div class="card">
-        <p><i class="<!--fas fa-thermometer-half-->" style="color:#059e8a;"></i> Temperature</p><p><span class="reading"><span id="temp">%Temperature%</span> C</span></p>
+        <p><i class="fa-solid fa-plug-circle-bolt" style="color:#059e8a;"></i> AC_Current</p><p><span class="reading"><span id="AC_Current">%AC_Current%</span> A</span></p>
       </div>
       <div class="card">
-        <p><i class="" style="color:#00add6;"></i> Power gen total</p><p><span class="reading"><span id="hum">%Power_gen_total%</span> KwH</span></p>
+        <p><i class="fa-solid fa-plug-circle-bolt" style="color:#059e8a;"></i> AC_Power</p><p><span class="reading"><span id="AC_Power">%AC_Power%</span> W</span></p>
       </div>
       <div class="card">
-        <p><i class="" style="color:#e1e437;"></i> Status</p><p><span class="reading"><span id="pres">%Status%</span> </span></p>
+        <p><i class="fa-solid fa-thermometer-half" style="color:#000000;"></i> Temperature</p><p><span class="reading"><span id="Temperature">%Temperature%</span> C</span></p>
+      </div>
+      <div class="card">
+        <p><i class="fa-solid fa-badge-check" style="color:#000000;"></i> Power gen total</p><p><span class="reading"><span id="Power_gen_total">%Power_gen_total%</span> KwH</span></p>
+      </div>
+      <div class="card">
+        <p><i class="fa-solid fa-star" style="color:#000000;"></i> Status</p><p><span class="reading"><span id="Status">%Status%</span> </span></p>
       </div>
     </div>
   </div>
@@ -242,20 +243,51 @@ if (!!window.EventSource) {
   console.log("message", e.data);
  }, false);
  
- source.addEventListener('temperature', function(e) {
-  console.log("temperature", e.data);
+ source.addEventListener('DC_Voltage', function(e) {
+  console.log("DC_Voltage", e.data);
   document.getElementById("temp").innerHTML = e.data;
  }, false);
  
- source.addEventListener('humidity', function(e) {
-  console.log("humidity", e.data);
-  document.getElementById("hum").innerHTML = e.data;
+ source.addEventListener('DC_Current', function(e) {
+  console.log("DC_Current", e.data);
+  document.getElementById("DC_Current").innerHTML = e.data;
  }, false);
  
- source.addEventListener('pressure', function(e) {
-  console.log("pressure", e.data);
-  document.getElementById("pres").innerHTML = e.data;
+ source.addEventListener('DC_Power', function(e) {
+  console.log("DC_Power", e.data);
+  document.getElementById("DC_Power").innerHTML = e.data;
  }, false);
+
+ source.addEventListener('AC_Voltage', function(e) {
+  console.log("AC_Voltage", e.data);
+  document.getElementById("AC_Voltage").innerHTML = e.data;
+ }, false);
+
+ source.addEventListener('AC_Current', function(e) {
+  console.log("AC_Current", e.data);
+  document.getElementById("AC_Current").innerHTML = e.data;
+ }, false);
+
+ source.addEventListener('AC_Power', function(e) {
+  console.log("AC_Power", e.data);
+  document.getElementById("AC_Power").innerHTML = e.data;
+ }, false);
+
+ source.addEventListener('Temperature', function(e) {
+  console.log("Temperature", e.data);
+  document.getElementById("Temperature").innerHTML = e.data;
+ }, false);
+
+ source.addEventListener('Power_gen_total', function(e) {
+  console.log("Power_gen_total", e.data);
+  document.getElementById("Power_gen_total").innerHTML = e.data;
+ }, false);
+
+ source.addEventListener('Status', function(e) {
+  console.log("Status", e.data);
+  document.getElementById("Status").innerHTML = e.data;
+ }, false);
+
 }
 </script>
 </body>
@@ -268,6 +300,9 @@ void setup()
     Serial2.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
     delay(1000);
     Serial.println("Setup ...");
+    // saving Power (startup was unreliable without that)
+    setCpuFrequencyMhz(160);
+
     
     //Config for MQTT server is saved in filesystem
     //clean FS, for testing
@@ -342,7 +377,8 @@ void setup()
         inverterID = strtol(custom_inverterID.getValue(),NULL,16);
         Serial.print("saving inverterID as ");
         Serial.print(inverterID,16);
-        wifiManager.server.release();
+        // didn't help with rleasing the socket on port 80
+        // wifiManager.server.release();
 
         // save the custom parameters to FS
         Serial.println("saving config");
@@ -387,8 +423,10 @@ void setup()
     // Serial.println("Welcome to Micro Inverter Interface by ATCnetz.de and enwi.one");
 
     // WebSerial is accessible at "<IP Address>/webserial" in browser
-    WebSerial.begin(&server);
-    WebSerial.msgCallback(recvMsg);
+
+    // disabled for release, maybe reenable for troubleshooting?
+    //WebSerial.begin(&server);
+    //WebSerial.msgCallback(recvMsg);
 
     // Handle Web Server - crashes when there are no values - TBD
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -406,8 +444,6 @@ void setup()
     client->send("hello!", NULL, millis(), 10000);
   });
   server.addHandler(&events);
-
-  
   server.begin();
 
   if ( sizeof(mqtt_server) ) {
@@ -432,39 +468,34 @@ uint32_t lastSendMillis = 0;
 
 void loop()
 {
-
 const uint32_t currentMillis = millis();
 if (currentMillis - lastSendMillis > 2000)
   {
   lastSendMillis = currentMillis;
     
   //digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-  //WebSerial.println("");
   Serial.print("Sending request now to InverterID ");
   Serial.println(inverterID,16);
-  WebSerial.print("Sending request now to InverterID (shown as as decimal) ");
-  WebSerial.println(inverterID);
-
-  // was 2000
-  delay(2000);
+  //WebSerial.print("Sending request now to InverterID (shown as as decimal) ");
+  //WebSerial.println(inverterID);
 
   const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
   
   if (status.valid)
     {
-    WebSerial.println("*********************************************");
-    WebSerial.println("Received Inverter Status");
-    WebSerial.print("Device (shown as as decimal): ");
-    WebSerial.println(inverterID);
-    WebSerial.println("Status: " + String(status.state));
-    WebSerial.println("DC_Voltage: " + String(status.dcVoltage) + "V");
-    WebSerial.println("DC_Current: " + String(status.dcCurrent) + "A");
-    WebSerial.println("DC_Power: " + String(status.dcPower) + "W");
-    WebSerial.println("AC_Voltage: " + String(status.acVoltage) + "V");
-    WebSerial.println("AC_Current: " + String(status.acCurrent) + "A");
-    WebSerial.println("AC_Power: " + String(status.acPower) + "W");
-    WebSerial.println("Power gen total: " + String(status.totalGeneratedPower));
-    WebSerial.println("Temperature: " + String(status.temperature));
+    //WebSerial.println("*********************************************");
+    //WebSerial.println("Received Inverter Status");
+    //WebSerial.print("Device (shown as decimal): ");
+    //WebSerial.println(inverterID);
+    //WebSerial.println("Status: " + String(status.state));
+    //WebSerial.println("DC_Voltage: " + String(status.dcVoltage) + "V");
+    //WebSerial.println("DC_Current: " + String(status.dcCurrent) + "A");
+    //WebSerial.println("DC_Power: " + String(status.dcPower) + "W");
+    //WebSerial.println("AC_Voltage: " + String(status.acVoltage) + "V");
+    //WebSerial.println("AC_Current: " + String(status.acCurrent) + "A");
+    //WebSerial.println("AC_Power: " + String(status.acPower) + "W");
+    //WebSerial.println("Power gen total: " + String(status.totalGeneratedPower));
+    //WebSerial.println("Temperature: " + String(status.temperature));
     // print Status to Serial for Debug
     Serial.println("*********************************************");
     Serial.println("Received Inverter Status");
@@ -479,24 +510,6 @@ if (currentMillis - lastSendMillis > 2000)
     Serial.println("AC_Power: " + String(status.acPower) + "W");
     Serial.println("Power gen total: " + String(status.totalGeneratedPower));
     Serial.println("Temperature: " + String(status.temperature));
-    delay(2000);
-    }
-  else
-    {
-    Serial.print("Received no Inverter Status from ");
-    Serial.println(inverterID,16);
-
-    WebSerial.print("Received no Inverter Status from ");
-    
-    WebSerial.println(inverterID);
-    }
-  }
-  
-  {
-  const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
-
-  if (status.valid)
-    {
     // Send Events to the Web Server with the Sensor Readings
     events.send("ping",NULL,millis());
     events.send(String(status.dcVoltage).c_str(),"DC_Voltage",millis());
@@ -508,10 +521,21 @@ if (currentMillis - lastSendMillis > 2000)
     events.send(String(status.temperature).c_str(),"Temperature",millis());
     events.send(String(status.totalGeneratedPower).c_str(),"Power_gen_total",millis());
     events.send(String(status.state).c_str(),"Status",millis());
-    delay(5000);
-    
     
 
+    // update global variables for the webserver (processor)
+    dcVoltage1 = (status.dcVoltage);
+    dcCurrent1 = (status.dcCurrent);
+    dcPower1 = (status.dcPower);
+    acVoltage1 = (status.acVoltage);
+    acCurrent1 = (status.acCurrent);
+    acPower1 = (status.acPower);
+    temperature = (status.temperature);
+    totalGeneratedPower1 = (status.totalGeneratedPower);
+    state1 = (status.state);
+
+
+    // do the mqtt thing if MQTT server is given
     if ( sizeof(mqtt_server) ) 
       {
       if (!mqtt.connected()) 
@@ -528,70 +552,63 @@ if (currentMillis - lastSendMillis > 2000)
         
           // Temperature in Celsius
           {
-          const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
+          
+          //do we still need this?
+          //const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
         
           // Uncomment the next line to set temperature in Fahrenheit 
           // (and comment the previous temperature line)
           //temperature = 1.8 * bme.readTemperature() + 32; // Temperature in Fahrenheit
           
           // Convert the value to a char array
-          dcVoltage1 = (status.dcVoltage);
           char dcVoltage[8];
           dtostrf(dcVoltage1, 1, 2, dcVoltage);
           //Serial.print("Mqtt-dcVoltage: ");
           //Serial.println(dcVoltage);
           mqtt.publish("pv1/dcVoltage", dcVoltage);
 
-          dcCurrent1 = (status.dcCurrent);
           char dcCurrent[8];
           dtostrf(dcCurrent1, 1, 2, dcCurrent);
           //Serial.print("Mqtt-dcCurrent: ");
           //Serial.println(dcCurrent);
           mqtt.publish("pv1/dcCurrent", dcCurrent);
 
-          dcPower1 = (status.dcPower);
           char dcPower[8];
           dtostrf(dcPower1, 1, 2, dcPower);
           //Serial.print("Mqtt-dcPower: ");
           //Serial.println(dcPower);
           mqtt.publish("pv1/dcPower", dcPower);
 
-          acVoltage1 = (status.acVoltage);
           char acVoltage[8];
           dtostrf(acVoltage1, 1, 2, acVoltage);
           //Serial.print("Mqtt-acVoltage: ");
           //Serial.println(acVoltage);
           mqtt.publish("pv1/acVoltage", acVoltage);
 
-          acCurrent1 = (status.acCurrent);
           char acCurrent[8];
           dtostrf(acCurrent1, 1, 2, acCurrent);
           //Serial.print("Mqtt-acCurrent: ");
           //Serial.println(acCurrent);
           mqtt.publish("pv1/acCurrent", acCurrent);
 
-          acPower1 = (status.acPower);
           char acPower[8];
           dtostrf(acPower1, 1, 2, acPower);
           //Serial.print("Mqtt-acPower: ");
           //Serial.println(acPower);
           mqtt.publish("pv1/acPower", acPower);
 
-          temperature = (status.temperature);
           char tempString[8];
           dtostrf(temperature, 1, 2, tempString);
           //Serial.print("Mqtt-Temperature: ");
           //Serial.println(tempString);
           mqtt.publish("pv1/temperature", tempString);
 
-          totalGeneratedPower1 = (status.totalGeneratedPower);
           char totalGeneratedPower[8];
           dtostrf(totalGeneratedPower1, 1, 2, totalGeneratedPower);
           //Serial.print("Mqtt-totalGeneratedPower: ");
           //Serial.println(totalGeneratedPower);
           mqtt.publish("pv1/totalGeneratedPower", totalGeneratedPower);
 
-          state1 = (status.state);
           char state[8];
           dtostrf(state1, 1, 2, state);
           //Serial.print("Mqtt-state: ");
@@ -606,6 +623,15 @@ if (currentMillis - lastSendMillis > 2000)
 
         }
       }
+
+    }
+  else
+    {
+    Serial.print("Received no Inverter Status from ");
+    Serial.println(inverterID,16);
+
+    //WebSerial.print("Received no Inverter Status from ");
+    //WebSerial.println(inverterID);
     }
   }
 }
