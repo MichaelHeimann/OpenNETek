@@ -245,7 +245,7 @@ if (!!window.EventSource) {
  
  source.addEventListener('DC_Voltage', function(e) {
   console.log("DC_Voltage", e.data);
-  document.getElementById("temp").innerHTML = e.data;
+  document.getElementById("DC_Voltage").innerHTML = e.data;
  }, false);
  
  source.addEventListener('DC_Current', function(e) {
