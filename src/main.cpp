@@ -1,7 +1,7 @@
 #include <FS.h>
 #include <string.h>
 #include <SPIFFS.h>
-#include "NETSGPClient.h"
+#include <NETSGPClient.h>
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
