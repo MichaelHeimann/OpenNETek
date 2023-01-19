@@ -16,15 +16,14 @@
 //Optionen Start
 
 // Add your MQTT Broker Data:
-char mqtt_server[40];  //mqtt Broker ip
-uint16_t mqtt_port;  //mqtt Broker port
-char mqtt_user[32];         //mqtt Username
-char mqtt_password[32];     //mqtt Password
-//uint32_t inverterID = 0x38004044; /// Identifier of your inverter (see label on inverter)
-uint32_t inverterID = 0x18CBA80; /// Identifier of your inverter (see label on inverter)
+char mqtt_server[40];     //mqtt Broker ip
+uint16_t mqtt_port;       //mqtt Broker port
+char mqtt_user[32];       //mqtt Username
+char mqtt_password[32];   //mqtt Password
+char mqtt_topic[20];      //mqtt main topic of this Inverter
 
+uint32_t inverterID; // will contain the identifier of your inverter (see label on inverter, but be aware that its in hex!)
 
-//
 
 //Optionen End
 
@@ -91,7 +90,7 @@ void reconnect() {
   while (!mqtt.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
-    if (mqtt.connect("ESP8266Client")) {
+    if (mqtt.connect("ESP32Client")) {
       Serial.println("connected");
       // Subscribe
       mqtt.subscribe("esp32/output");
@@ -131,6 +130,15 @@ constexpr const uint8_t TX_PIN = 17; /// TX pin (of RF module)
 
 NETSGPClient pvclient(Serial2, PROG_PIN); /// NETSGPClient instance
 
+char* get_mqtt_topic(const char* subdir){
+  //memset(&subdir[0], 0, sizeof(subdir));
+
+  char* topic_tmp = new char[50];
+  strncpy(topic_tmp, mqtt_topic, sizeof(mqtt_topic));
+  strncat(topic_tmp, subdir, sizeof(subdir));
+
+  return topic_tmp;
+}
 
 
 String processor(const String& var){
@@ -343,6 +351,11 @@ void setup()
             Serial.print("mqtt_password = ");
             Serial.println(mqtt_password);
             inverterID = strtol(json["custom_inverterID"],NULL,10);
+            // Create mqtt base-topic as "OpenNETek/<InverterID>"  
+            char buffer[9];
+            sprintf(buffer, "%x", inverterID);
+            strncpy(mqtt_topic, "OpenNETek/", sizeof("OpenNETek/"));
+            strncat(mqtt_topic, buffer, sizeof(buffer));
             Serial.print("inverterID = ");
             Serial.println(inverterID,16);
 
@@ -549,78 +562,67 @@ if (currentMillis - lastSendMillis > 2000)
       if (now - lastMsg > 5000) 
         {
         lastMsg = now;
+      
+        // Temperature in Celsius
+        // Uncomment the next line to set temperature in Fahrenheit 
+        // (and comment the previous temperature line)
+        //temperature = 1.8 * bme.readTemperature() + 32; // Temperature in Fahrenheit
         
-          // Temperature in Celsius
-          {
-          
-          //do we still need this?
-          //const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
+
+        char dcVoltage[8];
+        dtostrf(dcVoltage1, 1, 2, dcVoltage);
+        //Serial.print("Mqtt-dcVoltage: ");
+        //Serial.println(dcVoltage);
+        mqtt.publish(get_mqtt_topic("/dcVoltage"), dcVoltage);
+
+        char dcCurrent[8];
+        dtostrf(dcCurrent1, 1, 2, dcCurrent);
+        //Serial.print("Mqtt-dcCurrent: ");
+        //Serial.println(dcCurrent);
+        mqtt.publish(get_mqtt_topic("/dcCurrent"), dcCurrent);
+
+        char dcPower[8];
+        dtostrf(dcPower1, 1, 2, dcPower);
+        //Serial.print("Mqtt-dcPower: ");
+        //Serial.println(dcPower);
+        mqtt.publish(get_mqtt_topic("/dcPower"), dcPower);
+
+        char acVoltage[8];
+        dtostrf(acVoltage1, 1, 2, acVoltage);
+        //Serial.print("Mqtt-acVoltage: ");
+        //Serial.println(acVoltage);
+        mqtt.publish(get_mqtt_topic("/acVoltage"), acVoltage);
+
+        char acCurrent[8];
+        dtostrf(acCurrent1, 1, 2, acCurrent);
+        //Serial.print("Mqtt-acCurrent: ");
+        //Serial.println(acCurrent);
+        mqtt.publish(get_mqtt_topic("/acCurrent"), acCurrent);
+
+        char acPower[8];
+        dtostrf(acPower1, 1, 2, acPower);
+        //Serial.print("Mqtt-acPower: ");
+        //Serial.println(acPower);
+        mqtt.publish(get_mqtt_topic("/acPower"), acPower);
+
+        char tempString[8];
+        dtostrf(temperature, 1, 2, tempString);
+        //Serial.print("Mqtt-Temperature: ");
+        //Serial.println(tempString);
+        mqtt.publish(get_mqtt_topic("/temperature"), tempString);
+
+        char totalGeneratedPower[8];
+        dtostrf(totalGeneratedPower1, 1, 2, totalGeneratedPower);
+        //Serial.print("Mqtt-totalGeneratedPower: ");
+        //Serial.println(totalGeneratedPower);
+        mqtt.publish(get_mqtt_topic("/totalGeneratedPower"), totalGeneratedPower);
+
+        char state[8];
+        dtostrf(state1, 1, 2, state);
+        //Serial.print("Mqtt-state: ");
+        //Serial.println(state);
+        mqtt.publish(get_mqtt_topic("/state"), state);
         
-          // Uncomment the next line to set temperature in Fahrenheit 
-          // (and comment the previous temperature line)
-          //temperature = 1.8 * bme.readTemperature() + 32; // Temperature in Fahrenheit
-          
-          // Convert the value to a char array
-          char dcVoltage[8];
-          dtostrf(dcVoltage1, 1, 2, dcVoltage);
-          //Serial.print("Mqtt-dcVoltage: ");
-          //Serial.println(dcVoltage);
-          mqtt.publish("pv1/dcVoltage", dcVoltage);
-
-          char dcCurrent[8];
-          dtostrf(dcCurrent1, 1, 2, dcCurrent);
-          //Serial.print("Mqtt-dcCurrent: ");
-          //Serial.println(dcCurrent);
-          mqtt.publish("pv1/dcCurrent", dcCurrent);
-
-          char dcPower[8];
-          dtostrf(dcPower1, 1, 2, dcPower);
-          //Serial.print("Mqtt-dcPower: ");
-          //Serial.println(dcPower);
-          mqtt.publish("pv1/dcPower", dcPower);
-
-          char acVoltage[8];
-          dtostrf(acVoltage1, 1, 2, acVoltage);
-          //Serial.print("Mqtt-acVoltage: ");
-          //Serial.println(acVoltage);
-          mqtt.publish("pv1/acVoltage", acVoltage);
-
-          char acCurrent[8];
-          dtostrf(acCurrent1, 1, 2, acCurrent);
-          //Serial.print("Mqtt-acCurrent: ");
-          //Serial.println(acCurrent);
-          mqtt.publish("pv1/acCurrent", acCurrent);
-
-          char acPower[8];
-          dtostrf(acPower1, 1, 2, acPower);
-          //Serial.print("Mqtt-acPower: ");
-          //Serial.println(acPower);
-          mqtt.publish("pv1/acPower", acPower);
-
-          char tempString[8];
-          dtostrf(temperature, 1, 2, tempString);
-          //Serial.print("Mqtt-Temperature: ");
-          //Serial.println(tempString);
-          mqtt.publish("pv1/temperature", tempString);
-
-          char totalGeneratedPower[8];
-          dtostrf(totalGeneratedPower1, 1, 2, totalGeneratedPower);
-          //Serial.print("Mqtt-totalGeneratedPower: ");
-          //Serial.println(totalGeneratedPower);
-          mqtt.publish("pv1/totalGeneratedPower", totalGeneratedPower);
-
-          char state[8];
-          dtostrf(state1, 1, 2, state);
-          //Serial.print("Mqtt-state: ");
-          //Serial.println(state);
-          mqtt.publish("pv1/state", state);
-          
-          int len = String(inverterID).length();
-          char cStr[len+1];
-          itoa (inverterID, cStr, 10);
-          mqtt.publish("pv1/inverterID", cStr);
-          }   
-
         }
       }
 
