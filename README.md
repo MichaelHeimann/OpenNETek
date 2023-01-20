@@ -1,20 +1,30 @@
 # OpenNETek
 
-Based on a comment in the NETSGPClient Project ( https://github.com/atc1441/NETSGPClient/issues/13#issuecomment-1147458860 ) which uses 
-WifiManager, WebSerial, PubSubClient. Thanks a lot!
+You have a Smart Inverter with a name like SG600MD and it looks like this? 
 
-This project wants to improve inverters from newenergytek (www.newenergytek.com ) sold as whitelabel inverters. They can be bought from several brands via AliExpress, Amazon etc. .
-(At least some) have very limited monitoring capabilities or need proprietary "databoxes" which transfer the serial interface unencrypted over the air.
+![sample image of newenergytek microinverter](https://github.com/MichaelHeimann/OpenNETek/blob/master/newenergytek%20inverter.jpg?raw=true)
 
-The idea is to put an ESP/arduino into the inverter, use wifi to report performance data via MQTT and offer a simple web page without the need of any cloud service.
+Then this might be of use to you :)
+
+This repo is inspired by a comment in the NETSGPClient Project ( https://github.com/atc1441/NETSGPClient/issues/13#issuecomment-1147458860 ) which was a quick and dirty way of throwing some example code together and the result was a firmware for an esp that offers a webgui and mqtt capabilities. I loved it so much that I created this here to iron out some issues.
+
+This project offers esp32 firmware that improves inverters from newenergytek ( www.newenergytek.com ) sold under many brands. They can be bought from AliExpress, Amazon etc. .
+They have very limited monitoring capabilities via proprietary "databoxes" which transfer the serial interface unencrypted over the air.
+
+The idea is to put an ESP32 into the inverter to connect it to wifi. The ESP reports performance data via MQTT and offers a simple web page - all without the need of any cloud service.
 
 Guide:
 
-Hardware:
-* flash image on your ESP32
+Hardware modification:
 * open inverter
+![open inverter with LC12S](https://github.com/MichaelHeimann/OpenNETek/blob/master/inverter%20with%20LC12S.jpg?raw=true)
 * remove LC12S wireless uart module "LC12S" (5 pins, 4 used)
+![inverter without LC12S](https://github.com/MichaelHeimann/OpenNETek/blob/master/inverter%20without%20LC12S.jpg?raw=true)
+* flash image onto your ESP32 (depending on your ESP32 connection to the inverter, you might power the inverter logic when connecting USB to the ESP32 to flash it. So better do it unconnected)
 * connect ESP32 to the now free 3.3v, GND, RX and TX pins where the LC12S was connected to
+![inverter with cables to ESP32](https://github.com/MichaelHeimann/OpenNETek/blob/master/inverter%20cables%20to%20ESP32.jpg?raw=true)
+* (optional) remove blue plastic on thermal pads if neccessary. mine were still on. (also on the back of the mainboard)
+![inverter with plastic on thermal pads](https://github.com/MichaelHeimann/OpenNETek/blob/master/inverter%20blue%20plastic%20wtf.jpg?raw=true)
 
 Configuration:
 * after connecting DC power to the inverter, the ESP32 initializes
