@@ -130,6 +130,8 @@ constexpr const uint8_t TX_PIN = 17; /// TX pin (of RF module)
 
 NETSGPClient pvclient(Serial2, PROG_PIN); /// NETSGPClient instance
 
+
+// Return OpenNETek/<inverterID>/<parameter
 char* get_mqtt_topic(const char* subdir){
   //memset(&subdir[0], 0, sizeof(subdir));
 
@@ -304,147 +306,147 @@ if (!!window.EventSource) {
 
 void setup()
 {
-    Serial.begin(9600);
-    Serial2.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
-    delay(1000);
-    Serial.println("Setup ...");
-    // saving Power (startup was unreliable without that)
-    setCpuFrequencyMhz(160);
+  Serial.begin(9600);
+  Serial2.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+  delay(1000);
+  Serial.println("Setup ...");
+  // saving Power (startup was unreliable without that)
+  setCpuFrequencyMhz(160);
 
-    
-    //Config for MQTT server is saved in filesystem
-    //clean FS, for testing
-    //SPIFFS.format();
+  
+  //Config for MQTT server is saved in filesystem
+  //clean FS, for testing
+  //SPIFFS.format();
 
-    //read configuration from FS json
-    Serial.println("mounting FS...");
-    
-    if (SPIFFS.begin()) {
-      Serial.println("mounted file system");
-      if (SPIFFS.exists("/config.json")) {
-        //file exists, reading and loading
-        Serial.println("reading config file");
-        File configFile = SPIFFS.open("/config.json", "r");
-        if (configFile) {
-          Serial.println("opened config file");
-          size_t size = configFile.size();
-          // Allocate a buffer to store contents of the file.
-          std::unique_ptr<char[]> buf(new char[size]);
+  //read configuration from FS json
+  Serial.println("mounting FS...");
+  
+  if (SPIFFS.begin()) {
+    Serial.println("mounted file system");
+    if (SPIFFS.exists("/config.json")) {
+      //file exists, reading and loading
+      Serial.println("reading config file");
+      File configFile = SPIFFS.open("/config.json", "r");
+      if (configFile) {
+        Serial.println("opened config file");
+        size_t size = configFile.size();
+        // Allocate a buffer to store contents of the file.
+        std::unique_ptr<char[]> buf(new char[size]);
 
-          configFile.readBytes(buf.get(), size);
-          DynamicJsonBuffer jsonBuffer;
-          JsonObject& json = jsonBuffer.parseObject(buf.get());
-          json.printTo(Serial);
-          if (json.success()) {
-            Serial.println("\nparsed json");
-
-            strcpy(mqtt_server, json["mqtt_server"]);
-            Serial.print("mqtt_server = ");
-            Serial.println(mqtt_server);
-            mqtt_port = strtol(json["mqtt_port"],NULL,10);
-            Serial.print("mqtt_port = ");
-            Serial.println(mqtt_port,10);
-            strcpy(mqtt_user, json["mqtt_user"]);
-            Serial.print("mqtt_user = ");
-            Serial.println(mqtt_user);
-            strcpy(mqtt_password, json["mqtt_password"]);
-            Serial.print("mqtt_password = ");
-            Serial.println(mqtt_password);
-            inverterID = strtol(json["custom_inverterID"],NULL,10);
-            // Create mqtt base-topic as "OpenNETek/<InverterID>"  
-            char buffer[9];
-            sprintf(buffer, "%x", inverterID);
-            strncpy(mqtt_topic, "OpenNETek/", sizeof("OpenNETek/"));
-            strncat(mqtt_topic, buffer, sizeof(buffer));
-            Serial.print("inverterID = ");
-            Serial.println(inverterID,16);
-
-          } else {
-            Serial.println("failed to load json config");
-          }
-        }
-      } else {
-        // lets get wifimanager to get us some config
-
-        // WifiManager stuff
-        WiFiManager wifiManager;
-        // uncomment to delete WiFi settings after each Reset.
-        wifiManager.resetSettings();
-        wifiManager.setDebugOutput(true);
-        WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
-        WiFiManagerParameter custom_mqtt_port("port", "mqtt port", "1883", 6);
-        WiFiManagerParameter custom_mqtt_user("user", "mqtt user", mqtt_user, 32);
-        WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 32);
-        WiFiManagerParameter custom_inverterID("InverterID", "InverterID","" , 8); // as printed on the label of the inverter which is in Hex
-        wifiManager.addParameter(&custom_mqtt_server);
-        wifiManager.addParameter(&custom_mqtt_port);
-        wifiManager.addParameter(&custom_mqtt_user);
-        wifiManager.addParameter(&custom_mqtt_password);
-        wifiManager.addParameter(&custom_inverterID);
-        
-        wifiManager.autoConnect("OpenNETek", "opennetek!");
-        strcpy (mqtt_server, custom_mqtt_server.getValue() );
-        mqtt_port = strtol(custom_mqtt_port.getValue(),NULL,10);
-        strcpy (mqtt_user, custom_mqtt_user.getValue() );
-        strcpy (mqtt_password, custom_mqtt_password.getValue() );
-        inverterID = strtol(custom_inverterID.getValue(),NULL,16);
-        Serial.print("saving inverterID as ");
-        Serial.print(inverterID,16);
-        // didn't help with rleasing the socket on port 80
-        // wifiManager.server.release();
-
-        // save the custom parameters to FS
-        Serial.println("saving config");
+        configFile.readBytes(buf.get(), size);
         DynamicJsonBuffer jsonBuffer;
-        JsonObject& json = jsonBuffer.createObject();
-        json["mqtt_server"] = mqtt_server;
-        json["mqtt_port"] = mqtt_port;
-        json["mqtt_user"] = mqtt_user;
-        json["mqtt_password"] = mqtt_password;
-        json["custom_inverterID"] = inverterID;
-
-        File configFile = SPIFFS.open("/config.json", "w");
-        if (!configFile) {
-          Serial.println("failed to open config file for writing");
-        }
-
+        JsonObject& json = jsonBuffer.parseObject(buf.get());
         json.printTo(Serial);
-        json.printTo(configFile);
-        configFile.close();
-        //end save
+        if (json.success()) {
+          Serial.println("\nparsed json");
 
-        // restart to free up port 80 and avoid AsyncTCP.cpp:1268] begin(): bind error: -8
-        // In Debug Scenario with config reset at the beginning this needs to be uncommented.
-        ESP.restart();
+          strcpy(mqtt_server, json["mqtt_server"]);
+          Serial.print("mqtt_server = ");
+          Serial.println(mqtt_server);
+          mqtt_port = strtol(json["mqtt_port"],NULL,10);
+          Serial.print("mqtt_port = ");
+          Serial.println(mqtt_port,10);
+          strcpy(mqtt_user, json["mqtt_user"]);
+          Serial.print("mqtt_user = ");
+          Serial.println(mqtt_user);
+          strcpy(mqtt_password, json["mqtt_password"]);
+          Serial.print("mqtt_password = ");
+          Serial.println(mqtt_password);
+          inverterID = strtol(json["custom_inverterID"],NULL,10);
+          // Create mqtt base-topic as "OpenNETek/<InverterID>"  
+          char buffer[9];
+          sprintf(buffer, "%x", inverterID);
+          strncpy(mqtt_topic, "OpenNETek/", sizeof("OpenNETek/"));
+          strncat(mqtt_topic, buffer, sizeof(buffer));
+          Serial.print("inverterID = ");
+          Serial.println(inverterID,16);
+
+        } else {
+          Serial.println("failed to load json config");
+        }
       }
-
     } else {
-      Serial.println("failed to mount FS");
-      Serial.println("Trying to format...");
-      if (SPIFFS.format()) {
-        Serial.println("Formatting successful! Restarting...");
-        ESP.restart();
-      } else {
-        Serial.println("Formatting not successful!");
+      // lets get wifimanager to get us some config
+
+      // WifiManager stuff
+      WiFiManager wifiManager;
+      // uncomment to delete WiFi settings after each Reset.
+      wifiManager.resetSettings();
+      wifiManager.setDebugOutput(true);
+      WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
+      WiFiManagerParameter custom_mqtt_port("port", "mqtt port", "1883", 6);
+      WiFiManagerParameter custom_mqtt_user("user", "mqtt user", mqtt_user, 32);
+      WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 32);
+      WiFiManagerParameter custom_inverterID("InverterID", "InverterID","" , 8); // as printed on the label of the inverter which is in Hex
+      wifiManager.addParameter(&custom_mqtt_server);
+      wifiManager.addParameter(&custom_mqtt_port);
+      wifiManager.addParameter(&custom_mqtt_user);
+      wifiManager.addParameter(&custom_mqtt_password);
+      wifiManager.addParameter(&custom_inverterID);
+      
+      wifiManager.autoConnect("OpenNETek", "opennetek!");
+      strcpy (mqtt_server, custom_mqtt_server.getValue() );
+      mqtt_port = strtol(custom_mqtt_port.getValue(),NULL,10);
+      strcpy (mqtt_user, custom_mqtt_user.getValue() );
+      strcpy (mqtt_password, custom_mqtt_password.getValue() );
+      inverterID = strtol(custom_inverterID.getValue(),NULL,16);
+      Serial.print("saving inverterID as ");
+      Serial.print(inverterID,16);
+      // didn't help with rleasing the socket on port 80
+      // wifiManager.server.release();
+
+      // save the custom parameters to FS
+      Serial.println("saving config");
+      DynamicJsonBuffer jsonBuffer;
+      JsonObject& json = jsonBuffer.createObject();
+      json["mqtt_server"] = mqtt_server;
+      json["mqtt_port"] = mqtt_port;
+      json["mqtt_user"] = mqtt_user;
+      json["mqtt_password"] = mqtt_password;
+      json["custom_inverterID"] = inverterID;
+
+      File configFile = SPIFFS.open("/config.json", "w");
+      if (!configFile) {
+        Serial.println("failed to open config file for writing");
       }
+
+      json.printTo(Serial);
+      json.printTo(configFile);
+      configFile.close();
+      //end save
+
+      // restart to free up port 80 and avoid AsyncTCP.cpp:1268] begin(): bind error: -8
+      // In Debug Scenario with config reset at the beginning this needs to be uncommented.
+      ESP.restart();
     }
-    // connect to saved Wifi
-    WiFi.begin();
-    delay(2000);
 
-    
-    // Serial.println("Welcome to Micro Inverter Interface by ATCnetz.de and enwi.one");
+  } else {
+    Serial.println("failed to mount FS");
+    Serial.println("Trying to format...");
+    if (SPIFFS.format()) {
+      Serial.println("Formatting successful! Restarting...");
+      ESP.restart();
+    } else {
+      Serial.println("Formatting not successful!");
+    }
+  }
+  // connect to saved Wifi
+  WiFi.begin();
+  delay(2000);
 
-    // WebSerial is accessible at "<IP Address>/webserial" in browser
+  
+  // Serial.println("Welcome to Micro Inverter Interface by ATCnetz.de and enwi.one");
 
-    // disabled for release, maybe reenable for troubleshooting?
-    //WebSerial.begin(&server);
-    //WebSerial.msgCallback(recvMsg);
+  // WebSerial is accessible at "<IP Address>/webserial" in browser
 
-    // Handle Web Server - crashes when there are no values - TBD
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor);
-    //request->send(200, "text/html", index_html);
+  // disabled for release, maybe reenable for troubleshooting?
+  //WebSerial.begin(&server);
+  //WebSerial.msgCallback(recvMsg);
+
+  // Handle Web Server - crashes when there are no values - TBD
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+  request->send_P(200, "text/html", index_html, processor);
+  //request->send(200, "text/html", index_html);
   });
 
   // Handle Web Server Events
