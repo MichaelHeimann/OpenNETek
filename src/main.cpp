@@ -11,6 +11,7 @@
 //#include <WebSerial.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h> 
+#include <AsyncElegantOTA.h>
 #define LED 2
 
 //Optionen Start
@@ -443,7 +444,7 @@ void setup()
   //WebSerial.begin(&server);
   //WebSerial.msgCallback(recvMsg);
 
-  // Handle Web Server - crashes when there are no values - TBD
+  // Handle Web Server
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
   request->send_P(200, "text/html", index_html, processor);
   //request->send(200, "text/html", index_html);
@@ -459,6 +460,10 @@ void setup()
     client->send("hello!", NULL, millis(), 10000);
   });
   server.addHandler(&events);
+
+  // OTA via /update
+  AsyncElegantOTA.begin(&server);
+
   server.begin();
 
   if ( sizeof(mqtt_server) ) {
@@ -636,6 +641,7 @@ if (currentMillis - lastSendMillis > 2000)
 
     //WebSerial.print("Received no Inverter Status from ");
     //WebSerial.println(inverterID);
+    
     }
   }
 }
