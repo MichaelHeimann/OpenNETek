@@ -20,7 +20,7 @@ Hardware modification:
 ![open inverter with LC12S](https://github.com/MichaelHeimann/OpenNETek/blob/master/inverter%20with%20LC12S.jpg?raw=true)
 * remove LC12S wireless uart module "LC12S" (6 pins, 4 used)
 ![inverter without LC12S](https://github.com/MichaelHeimann/OpenNETek/blob/master/inverter%20without%20LC12S.jpg?raw=true)
-* flash image onto your ESP32 (depending on your ESP32 connection to the inverter, you might power the inverter logic when connecting USB to the ESP32 to flash it. So better do it unconnected)
+* flash image onto your ESP32 (depending on your ESP32 connection to the inverter, you might power the inverter logic when connecting USB to the ESP32 to flash it. So better do it unconnected) You can update the firmware later using http://<ip_of_ESP>/update without usb connection. This way the esp can stay in the inverter and still receive firmware updates.
 * connect ESP32 to the now free 3.3v, GND, RX and TX pins where the LC12S was connected to
 ![inverter with cables to ESP32](https://github.com/MichaelHeimann/OpenNETek/blob/master/inverter%20cables%20to%20ESP32.jpg?raw=true)
 * (optional) remove blue plastic on thermal pads if neccessary. mine were still on. (also on the back of the mainboard)
