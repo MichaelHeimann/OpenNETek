@@ -34,7 +34,7 @@ Configuration:
 * after connecting DC power to the inverter, the ESP32 initializes
 * after a minute or so: connect to SSID:OpenNETek Pass:opennetek!
 * a captive portal pops up and you can enter wifi, mqtt details and the inverterid from the chassis
-* after that, the inverter publishes performance data via mqtt and http (Accessible via http://opennetek-<InverterID>.local/ from the same Network)
+* after that, the inverter publishes performance data via mqtt and http (Accessible via http://opennetek-%InverterID%.local/ from the same Network)
 
 I suggest using an ESP32 with the possibility to connect an external antenna. This way you can repurpose the hole (and even the antenna) from the LC12S.
 I used an ESP32 WROOM 32U.
