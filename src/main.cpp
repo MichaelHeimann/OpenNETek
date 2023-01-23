@@ -12,6 +12,7 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h> 
 #include <AsyncElegantOTA.h>
+#include <ESPmDNS.h>
 #define LED 2
 
 //Optionen Start
@@ -433,9 +434,33 @@ void setup()
   }
   // connect to saved Wifi
   WiFi.begin();
-  delay(2000);
-
+  Serial.print("Connecting to WiFi ");
+  // ToDo: Loops forever if Wifi Info is wrong / outdated / Wifi not available for other reasons.  Offer reset etc ?
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+    Serial.print(".");
+  }
   
+  Serial.print("\nConnected to WiFi.");
+  Serial.print("IPv4: ");
+  Serial.println(WiFi.localIP());
+  if (WiFi.enableIpV6()) {
+    Serial.print("IPv6: ");
+    Serial.println(WiFi.localIPv6());
+  }
+  char hostname[20];
+  strcpy(hostname,mqtt_topic);
+  
+  // convert OpenNETek/<inverterID> to OpenNETek-<inverterID>
+  hostname[9]='-';
+
+  if (!MDNS.begin(hostname)) {
+    Serial.println("Error setting up MDNS responder!");
+  }
+  Serial.println("mDNS responder started");
+
+
+
   // Serial.println("Welcome to Micro Inverter Interface by ATCnetz.de and enwi.one");
 
   // WebSerial is accessible at "<IP Address>/webserial" in browser
@@ -449,6 +474,10 @@ void setup()
   request->send_P(200, "text/html", index_html, processor);
   //request->send(200, "text/html", index_html);
   });
+
+
+  // Start MDNS-SD Dienst
+  MDNS.addService("http", "tcp", 80);
 
   // Handle Web Server Events
   events.onConnect([](AsyncEventSourceClient *client){
