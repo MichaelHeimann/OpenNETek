@@ -34,7 +34,20 @@ AsyncWebServer server(80);
 // Create an Event Source on /events
 AsyncEventSource events("/events");
 
-    
+// Parameter für Config POST
+const char* PARAM_INPUT_1 = "ssid";
+const char* PARAM_INPUT_2 = "pass";
+const char* PARAM_INPUT_3 = "mqtt-server";
+const char* PARAM_INPUT_4 = "mqtt-port";
+const char* PARAM_INPUT_5 = "mqtt-username";
+const char* PARAM_INPUT_6 = "mqtt-password";
+const char* PARAM_INPUT_7 = "inverter-id";
+
+// WiFi Variablen in denen die Werte vom Config POST gespeichert werden
+String ssid;
+String pass;
+
+
 
 // Timer variables
 unsigned long lastTime = 0;  
@@ -183,6 +196,152 @@ String processor(const String& var){
   }
 }
 
+String config_processor(const String& var){
+  {
+  //Serial.println("Inverter function returned");
+  if(var == "SSID"){
+    return String(WiFi.SSID());
+    }
+  if(var == "MQTT-SERVER"){
+    return String(mqtt_server);
+    }
+  if(var == "MQTT-PORT"){
+    return String(mqtt_port, 10);
+    }
+  if(var == "MQTT-USERNAME"){
+    return String(mqtt_user);
+    }
+  if(var == "INVERTER-ID"){
+    return String(inverterID, 16);
+    }
+
+  //Serial.println("default catchall return is coming...");
+  return String();
+  }
+}
+
+
+const char config_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE html><html>
+  <head>
+    <title>OpenNETek Configuration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.2.1/css/all.css" integrity="sha384-twcuYPV86B3vvpwNhWJuaLdUSLF9+ttgM2A6M870UYXrOsxKfER2MKox5cirApyA" crossorigin="anonymous">  
+    <link rel="icon" href="data:,">
+    <style>
+      #config-table { width:100%%; display: table; }
+      #table-body { display: table-row-group; }
+      .table-row { display: table-row; }
+      .table-cell { width:40%%; display: table-cell;}
+      html {font-family: Arial; display: inline-block; text-align: center;}
+      p { font-size: 1.2rem;}
+      body {  margin: 0;}
+      .topnav { overflow: hidden; background-color: #50B8B4; color: white; font-size: 1rem; margin-bottom: -0.5rem; }
+      .menu { overflow: hidden; background-color: #90C8C4; color: white; font-size: 1rem; }
+      .content { padding: 20px; }
+      .card { background-color: white; box-shadow: 2px 2px 12px 1px rgba(140,140,140,.5); }
+      .cards { max-width: 800px; margin: 0 auto; display: grid; grid-gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+      .reading { font-size: 1.4rem; }
+    </style>
+  </head>
+  <body>
+  <div class="topnav">
+    <h1>Configuration</h1>
+  </div>
+  <div class="menu">
+    <a href="/"><i class="fa-solid fa-circle-info" style="color:#e1e437;"></i></a>
+  </div>
+  <div class="content">
+    <form action="/config" method="POST">
+      <div class="cards">
+        <div class="card">
+          <p>
+          <div id="config-table">
+            <div id="table-body">
+              <div class="table-row">
+                <div class="table-cell">
+                  <label for="ssid">SSID</label>
+                </div>
+                <div class="table-cell">
+                  <input type="text" id="ssid" name="ssid" value="%SSID%"><br>
+                </div>
+              </div>
+              <div class="table-row">
+                <div class="table-cell">
+                  <label for="pass">Password</label>
+                </div>
+                <div class="table-cell">
+                  <input type="password" id="pass" name="pass"><br>
+                </div>
+              </div>
+            </div>
+          </div>
+          </p>
+        </div>
+        <div class="card">
+          <p>
+          <div id="config-table">
+            <div id="table-body">
+              <div class="table-row">
+                <div class="table-cell">
+                  <label for="mqtt-server">mqtt-server</label>
+                </div>
+                <div class="table-cell">
+                  <input type="text" id="mqtt-server" name="mqtt-server" value="%MQTT-SERVER%" maxlength="39"><br>
+                </div>
+              </div>
+              <div class="table-row">
+                <div class="table-cell">
+                  <label for="mqtt-port">mqtt-port</label>
+                </div>
+                <div class="table-cell">
+                  <input type="number" id="mqtt-port" name="mqtt-port" value="%MQTT-PORT%" min="1" max="65535"><br>
+                </div>
+              </div>
+              <div class="table-row">
+                <div class="table-cell">
+                  <label for="mqtt-username">mqtt-username</label>
+                </div>
+                <div class="table-cell">
+                  <input type="text" id="mqtt-username" name="mqtt-username" value="%MQTT-USERNAME%" maxlength="31"><br>
+                </div>
+              </div>
+              <div class="table-row">
+                <div class="table-cell">
+                  <label for="mqtt-password">mqtt-password</label>
+                </div>
+                <div class="table-cell">
+                  <input type="password" id="mqtt-password" name="mqtt-password" maxlength="31"><br>
+                </div>
+              </div>
+            </div>
+          </div>
+          </p>
+        </div>
+        <div class="card">
+          <p>
+          <div id="config-table">
+            <div id="table-body">
+              <div class="table-row">
+                <div class="table-cell">
+                  <label for="inverter-id">Inverter-ID</label>
+                </div>
+                <div class="table-cell">
+                  <input type="text" id="inverter-id" name="inverter-id" value="%INVERTER-ID%"><br>
+                </div>
+              </div>
+            </div>
+          </div>
+          </p>
+        </div>
+      </div>
+    <p>
+    <input type ="submit" value ="Save">
+    </p>
+    </form>
+  </div>
+</body>
+</html>)rawliteral";
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
@@ -196,7 +355,8 @@ const char index_html[] PROGMEM = R"rawliteral(
     html {font-family: Arial; display: inline-block; text-align: center;}
     p { font-size: 1.2rem;}
     body {  margin: 0;}
-    .topnav { overflow: hidden; background-color: #50B8B4; color: white; font-size: 1rem; }
+    .topnav { overflow: hidden; background-color: #50B8B4; color: white; font-size: 1rem; margin-bottom: -0.5rem; }
+    .menu { overflow: hidden; background-color: #90C8C4; color: white; font-size: 1rem; }
     .content { padding: 20px; }
     .card { background-color: white; box-shadow: 2px 2px 12px 1px rgba(140,140,140,.5); }
     .cards { max-width: 800px; margin: 0 auto; display: grid; grid-gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
@@ -206,6 +366,9 @@ const char index_html[] PROGMEM = R"rawliteral(
 <body>
   <div class="topnav">
     <h1>OpenNETek</h1>
+  </div>
+    <div class="menu">
+    <a href="/config"><i class="fa-solid fa-gear" style="color:#e1e437;"></i></a>
   </div>
   <div class="content">
     <div class="cards">
@@ -231,7 +394,7 @@ const char index_html[] PROGMEM = R"rawliteral(
         <p><i class="fa-solid fa-thermometer-half" style="color:#000000;"></i> Temperature</p><p><span class="reading"><span id="Temperature">%Temperature%</span> C</span></p>
       </div>
       <div class="card">
-        <p><i class="fa-solid fa-badge-check" style="color:#000000;"></i> Power gen total</p><p><span class="reading"><span id="Power_gen_total">%Power_gen_total%</span> KwH</span></p>
+        <p><i class="fa-solid fa-badge-check" style="color:#000000;"></i> Power gen total</p><p><span class="reading"><span id="Power_gen_total">%Power_gen_total%</span> kWh</span></p>
       </div>
       <div class="card">
         <p><i class="fa-solid fa-star" style="color:#000000;"></i> Status</p><p><span class="reading"><span id="Status">%Status%</span> </span></p>
@@ -315,12 +478,19 @@ void setup()
   // saving Power (startup was unreliable without that)
   setCpuFrequencyMhz(160);
 
+  esp_err_t err;
+  err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
+  if (err == !ESP_OK) {
+    Serial.println("ERROR: Could not prevent persistant storage of Wifi Credentials in NVS.");
+  }
+
+  // Config for all bug wifi-ssid and wifi-password is saved in filesystem
+  // If no config file is there, wifimanager is started to create one and restart the ESP.
+  // So: Wifi will not connect if the config file is missing
   
-  //Config for MQTT server is saved in filesystem
   //clean FS, for testing
   //SPIFFS.format();
 
-  //read configuration from FS json
   Serial.println("mounting FS...");
   
   if (SPIFFS.begin()) {
@@ -341,7 +511,12 @@ void setup()
         json.printTo(Serial);
         if (json.success()) {
           Serial.println("\nparsed json");
-
+          ssid = json["wifi_ssid"].as<char*>();
+          Serial.print("wifi SSID = ");
+          Serial.println(ssid);
+          pass = json["wifi_pass"].as<char*>();
+          Serial.print("Wifi password = ");
+          Serial.println(pass);
           strcpy(mqtt_server, json["mqtt_server"]);
           Serial.print("mqtt_server = ");
           Serial.println(mqtt_server);
@@ -368,6 +543,7 @@ void setup()
         }
       }
     } else {
+      // there is no configfile in the filesystem
       // lets get wifimanager to get us some config
 
       // WifiManager stuff
@@ -386,7 +562,12 @@ void setup()
       wifiManager.addParameter(&custom_mqtt_password);
       wifiManager.addParameter(&custom_inverterID);
       
-      wifiManager.autoConnect("OpenNETek", "opennetek!");
+      while (!wifiManager.autoConnect("OpenNETek", "opennetek!")) {
+        Serial.print("Could not connect to specified SSID. Launching WifiManager again.");
+      }
+      ssid = wifiManager.getWiFiSSID();
+      pass = wifiManager.getWiFiPass();
+
       strcpy (mqtt_server, custom_mqtt_server.getValue() );
       mqtt_port = strtol(custom_mqtt_port.getValue(),NULL,10);
       strcpy (mqtt_user, custom_mqtt_user.getValue() );
@@ -394,13 +575,15 @@ void setup()
       inverterID = strtol(custom_inverterID.getValue(),NULL,16);
       Serial.print("saving inverterID as ");
       Serial.print(inverterID,16);
-      // didn't help with rleasing the socket on port 80
+      // didn't help with releasing the socket on port 80
       // wifiManager.server.release();
 
       // save the custom parameters to FS
       Serial.println("saving config");
       DynamicJsonBuffer jsonBuffer;
       JsonObject& json = jsonBuffer.createObject();
+      json["wifi_ssid"] = ssid;
+      json["wifi_pass"] = pass;
       json["mqtt_server"] = mqtt_server;
       json["mqtt_port"] = mqtt_port;
       json["mqtt_user"] = mqtt_user;
@@ -416,9 +599,7 @@ void setup()
       json.printTo(configFile);
       configFile.close();
       //end save
-
       // restart to free up port 80 and avoid AsyncTCP.cpp:1268] begin(): bind error: -8
-      // In Debug Scenario with config reset at the beginning this needs to be uncommented.
       ESP.restart();
     }
 
@@ -433,7 +614,8 @@ void setup()
     }
   }
   // connect to saved Wifi
-  WiFi.begin();
+  WiFi.begin(ssid.c_str(), pass.c_str());
+
   Serial.print("Connecting to WiFi ");
   // ToDo: Loops forever if Wifi Info is wrong / outdated / Wifi not available for other reasons.  Offer reset etc ?
   while (WiFi.status() != WL_CONNECTED) {
@@ -445,6 +627,7 @@ void setup()
   Serial.print("IPv4: ");
   Serial.println(WiFi.localIP());
   if (WiFi.enableIpV6()) {
+    delay(100);
     Serial.print("IPv6: ");
     Serial.println(WiFi.localIPv6());
   }
@@ -469,11 +652,105 @@ void setup()
   //WebSerial.begin(&server);
   //WebSerial.msgCallback(recvMsg);
 
-  // Handle Web Server
+  // Handle Web Server for /
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-  request->send_P(200, "text/html", index_html, processor);
-  //request->send(200, "text/html", index_html);
+    request->send_P(200, "text/html", index_html, processor);
   });
+
+
+  // Handle Web Server for /config
+  server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request){
+    //request->send(200, "text/html", config_html);
+    request->send_P(200, "text/html", config_html, config_processor);
+  });
+
+  // Handle Web Server for /config
+  server.on("/config", HTTP_POST, [](AsyncWebServerRequest *request){
+    int params = request->params();
+    for(int i=0;i<params;i++){
+      AsyncWebParameter* p = request->getParam(i);
+      if(p->isPost()){
+        // HTTP POST Wifi SSID value
+        if (p->name() == PARAM_INPUT_1) {
+          ssid = p->value().c_str();
+          Serial.print("SSID set to: ");
+          Serial.println(ssid);
+        }
+        // HTTP POST Wifi password value
+        if (p->name() == PARAM_INPUT_2) {
+          pass = p->value().c_str();
+          Serial.print("Password set to: ");
+          Serial.println(pass);
+        }
+        // HTTP POST MQTT server value
+        if (p->name() == PARAM_INPUT_3) {
+          strcpy(mqtt_server, p->value().c_str());
+          Serial.print("MQTT server set to: ");
+          Serial.println(mqtt_server);
+        }
+        // HTTP POST MQTT port value
+        if (p->name() == PARAM_INPUT_4) {
+          mqtt_port = strtol(p->value().c_str(),NULL,10);
+          Serial.print("MQTT port set to: ");
+          Serial.println(mqtt_port,10);
+        }
+        // HTTP POST MQTT username value
+        if (p->name() == PARAM_INPUT_5) {
+          strcpy(mqtt_user, p->value().c_str());
+          Serial.print("MQTT username set to: ");
+          Serial.println(mqtt_user);
+        }
+        // HTTP POST MQTT password value
+        if (p->name() == PARAM_INPUT_6) {
+          strcpy(mqtt_password, p->value().c_str());
+          Serial.print("MQTT password set to: ");
+          Serial.println(mqtt_password);
+        }
+        // HTTP POST inverter-ID value
+        if (p->name() == PARAM_INPUT_7) {
+          inverterID = strtol(p->value().c_str(),NULL,16);
+          Serial.print("Inverter ID set to: ");
+          Serial.println(inverterID,16);
+        }
+        //Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+      }
+    }
+    // save the custom parameters to FS
+    if (SPIFFS.begin()) {
+
+      Serial.println("saving config");
+      DynamicJsonBuffer jsonBuffer;
+      JsonObject& json = jsonBuffer.createObject();
+      json["wifi_ssid"] = ssid;
+      json["wifi_pass"] = pass;
+      json["mqtt_server"] = mqtt_server;
+      json["mqtt_port"] = mqtt_port;
+      json["mqtt_user"] = mqtt_user;
+      json["mqtt_password"] = mqtt_password;
+      json["custom_inverterID"] = inverterID;
+
+      File configFile = SPIFFS.open("/config.json", "w");
+      if (!configFile) {
+        // config file cannot be opened for writing
+        Serial.println("failed to open config file for writing");
+        request->send(200, "text/plain", "Failed to open config file for writing. Cannot save new configuration!");
+      } else {
+        // config file is opened for writing
+        json.printTo(configFile);
+        configFile.close();
+        json.printTo(Serial);
+        SPIFFS.end();
+          
+        //end save
+        request->send(200, "text/plain", "Done. ESP will restart with the new settings");
+        delay(3000);
+        ESP.restart();
+      }
+    }
+
+  });
+
+
 
 
   // Start MDNS-SD Dienst
