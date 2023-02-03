@@ -26,6 +26,71 @@ char mqtt_topic[20];      //mqtt main topic of this Inverter
 
 uint32_t inverterID; // will contain the identifier of your inverter (see label on inverter, but be aware that its in hex!)
 
+// Hostname of the ESP32 itself
+char hostname[20];
+
+// WiFi Variablen in denen die Werte vom Config POST gespeichert werden
+String ssid;
+String pass;
+
+// Proper Wifi Managment starts here. 
+// Copied with small changes from https://github.com/espressif/arduino-esp32/blob/master/libraries/WiFi/examples/WiFiIPv6/WiFiIPv6.ino
+// Kudos!
+
+static volatile bool wifi_connected = false;
+
+void wifiOnDisconnect(){
+    Serial.println("STA Disconnected");
+    delay(1000);
+    WiFi.begin(ssid.c_str(), pass.c_str());
+}
+
+
+void WiFiEvent(WiFiEvent_t event){
+    switch(event) {
+
+        case ARDUINO_EVENT_WIFI_AP_START:
+            //can set ap hostname here
+            WiFi.softAPsetHostname(hostname);
+            //enable ap ipv6 here
+            WiFi.softAPenableIpV6();
+            break;
+
+        case ARDUINO_EVENT_WIFI_STA_START:
+            //set sta hostname here
+            WiFi.setHostname(hostname);
+            break;
+        case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+            //enable sta ipv6 here
+            Serial.println("Connected to Wifi.");
+            WiFi.enableIpV6();
+            break;
+        case ARDUINO_EVENT_WIFI_STA_GOT_IP6:
+            Serial.print("STA IPv6: ");
+            Serial.println(WiFi.localIPv6());
+            wifi_connected = true; // IPv6 is sufficient to be "connected"
+            break;
+        case ARDUINO_EVENT_WIFI_AP_GOT_IP6:
+            Serial.print("AP IPv6: ");
+            Serial.println(WiFi.softAPIPv6());
+            break;
+        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+            Serial.print("STA IPv4: ");
+            Serial.println(WiFi.localIP());
+            wifi_connected = true;
+            break;
+        case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+            wifi_connected = false;
+            wifiOnDisconnect();
+            break;
+        default:
+            break;
+    }
+}
+
+
+// Proper Wifi Managment functions end here
+
 
 //Optionen End
 
@@ -43,9 +108,7 @@ const char* PARAM_INPUT_5 = "mqtt-username";
 const char* PARAM_INPUT_6 = "mqtt-password";
 const char* PARAM_INPUT_7 = "inverter-id";
 
-// WiFi Variablen in denen die Werte vom Config POST gespeichert werden
-String ssid;
-String pass;
+
 
 
 
@@ -614,6 +677,11 @@ void setup()
     }
   }
   // connect to saved Wifi
+  WiFi.disconnect(true);
+  WiFi.onEvent(WiFiEvent);
+  // only STA mode needed
+  //WiFi.mode(WIFI_MODE_STA);
+  WiFi.mode(WIFI_MODE_STA);
   WiFi.begin(ssid.c_str(), pass.c_str());
 
   Serial.print("Connecting to WiFi ");
@@ -623,15 +691,7 @@ void setup()
     Serial.print(".");
   }
   
-  Serial.print("\nConnected to WiFi.");
-  Serial.print("IPv4: ");
-  Serial.println(WiFi.localIP());
-  if (WiFi.enableIpV6()) {
-    delay(100);
-    Serial.print("IPv6: ");
-    Serial.println(WiFi.localIPv6());
-  }
-  char hostname[20];
+
   strcpy(hostname,mqtt_topic);
   
   // convert OpenNETek/<inverterID> to OpenNETek-<inverterID>
@@ -861,8 +921,8 @@ if (currentMillis - lastSendMillis > 2000)
     state1 = (status.state);
 
 
-    // do the mqtt thing if MQTT server is given
-    if ( sizeof(mqtt_server) ) 
+    // do the mqtt thing if MQTT server is given and Wifi is connected
+    if ( sizeof(mqtt_server) && wifi_connected ) 
       {
       if (!mqtt.connected()) 
         {
