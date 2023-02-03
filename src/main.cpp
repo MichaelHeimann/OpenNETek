@@ -684,13 +684,7 @@ void setup()
   WiFi.mode(WIFI_MODE_STA);
   WiFi.begin(ssid.c_str(), pass.c_str());
 
-  Serial.print("Connecting to WiFi ");
-  // ToDo: Loops forever if Wifi Info is wrong / outdated / Wifi not available for other reasons.  Offer reset etc ?
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100);
-    Serial.print(".");
-  }
-  
+   
 
   strcpy(hostname,mqtt_topic);
   
