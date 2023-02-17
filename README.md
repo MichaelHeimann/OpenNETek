@@ -20,11 +20,11 @@ Hardware modification:
 ![open inverter with LC12S](https://github.com/MichaelHeimann/OpenNETek/blob/master/inverter%20with%20LC12S.jpg?raw=true)
 * remove LC12S wireless uart module "LC12S" (6 pins, 4 used)
 ![inverter without LC12S](https://github.com/MichaelHeimann/OpenNETek/blob/master/inverter%20without%20LC12S.jpg?raw=true)
-* flash image onto your ESP32 (depending on your ESP32 connection to the inverter, you might power the inverter logic when connecting USB to the ESP32 to flash it. So better do it unconnected) You can update the firmware later using http://<ip_of_ESP>/update without usb connection. This way the esp can stay in the inverter and still receive firmware updates.
-* connect ESP32 to the now free 3.3v, GND, RX and TX pins where the LC12S was connected to. Sorry for black not being ground, the connector came this way and I was to lazy to change colors. pinout is:
-  - white is ground
+* flash image onto your ESP32 (depending on your ESP32 connection to the inverter, you might power the inverter logic when connecting USB to the ESP32 to flash it. So better do it unconnected) You can update the firmware later using http://&lt;ip_of_ESP&gt;/update without usb connection. This way the esp can stay in the inverter and still receive firmware updates.
+* connect ESP32 to the now free 3.3v, GND, RX and TX pins where the LC12S was connected to. The pinout is:
+  - black is ground
   - yellow is RX (which goes to TX of the ESP32, which is PIN17)
-  - black is TX (which goes to RX of the ESP32, which is PIN16)
+  - white is TX (which goes to RX of the ESP32, which is PIN16)
   - red is 3.3v
 ![inverter with cables to ESP32](https://github.com/MichaelHeimann/OpenNETek/blob/master/inverter%20cables%20to%20ESP32.jpg?raw=true)
 * (optional) remove blue plastic on thermal pads if neccessary. mine were still on. (also on the back of the mainboard)
@@ -34,7 +34,7 @@ Configuration:
 * after connecting DC power to the inverter, the ESP32 initializes
 * after a minute or so: connect to SSID:OpenNETek Pass:opennetek!
 * a captive portal pops up and you can enter wifi, mqtt details and the inverterid from the chassis
-* after that, the inverter publishes performance data via mqtt and http (Accessible via http://opennetek-%InverterID%.local/ from the same Network)
+* after that, the inverter publishes performance data via mqtt and http (Accessible via http://opennetek-&lt;InverterID&gt;.local/ from the same Network)
 
 I suggest using an ESP32 with the possibility to connect an external antenna. This way you can repurpose the hole (and even the antenna) from the LC12S.
 I used an ESP32 WROOM 32U.
