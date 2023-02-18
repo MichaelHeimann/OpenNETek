@@ -107,6 +107,7 @@ const char* PARAM_INPUT_4 = "mqtt-port";
 const char* PARAM_INPUT_5 = "mqtt-username";
 const char* PARAM_INPUT_6 = "mqtt-password";
 const char* PARAM_INPUT_7 = "inverter-id";
+const char* PARAM_INPUT_8 = "reset";
 
 
 
@@ -399,7 +400,10 @@ const char config_html[] PROGMEM = R"rawliteral(
         </div>
       </div>
     <p>
-    <input type ="submit" value ="Save">
+    <input type="submit" value="Save">
+    </p>
+    <p>
+    <input onclick="return confirm('Are you sure you want to do a factory reset?');" type="submit" name="reset" value="Factory Reset">
     </p>
     </form>
   </div>
@@ -765,6 +769,15 @@ void setup()
           inverterID = strtol(p->value().c_str(),NULL,16);
           Serial.print("Inverter ID set to: ");
           Serial.println(inverterID,16);
+        }
+        // HTTP POST via Factory Reset button
+        if (p->name() == PARAM_INPUT_8) {
+          Serial.println("Factory Reset initiated...");
+          SPIFFS.remove("/config.json");
+          SPIFFS.end();
+          request->send(200, "text/plain", "Resetting to factory defaults and rebooting ESP. Connect to SSID OpenNETek to start initial setup.");
+          delay(1000);
+          ESP.restart();
         }
         //Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
       }
