@@ -24,7 +24,7 @@ char mqtt_user[32];       //mqtt Username
 char mqtt_password[32];   //mqtt Password
 char mqtt_topic[20];      //mqtt main topic of this Inverter
 
-uint32_t inverterID; // will contain the identifier of your inverter (see label on inverter, but be aware that its in hex!)
+uint32_t inverterID = 0; // will contain the identifier of your inverter (see label on inverter, but be aware that its in hex!)
 
 // Hostname of the ESP32 itself
 char hostname[20];
@@ -208,6 +208,101 @@ constexpr const uint8_t TX_PIN = 17; /// TX pin (of RF module)
 
 
 NETSGPClient pvclient(Serial2, PROG_PIN); /// NETSGPClient instance
+
+
+// Start WifiManager Config Portal. unsigned long as a Parameter, zero for no timeout.
+void do_wifi_config(const unsigned long &timeout){
+  bool config_changed = false;
+  
+  WiFiManager wifiManager;
+  // uncomment to delete WiFi settings after each Reset.
+  wifiManager.resetSettings();
+  wifiManager.setDebugOutput(true);
+
+  WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
+  WiFiManagerParameter custom_mqtt_port("port", "mqtt port", "1883", 6);
+  WiFiManagerParameter custom_mqtt_user("user", "mqtt user", mqtt_user, 32);
+  WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 32);
+  WiFiManagerParameter custom_inverterID("InverterID", "InverterID",String(inverterID, 16).c_str() , 8); // as printed on the label of the inverter which is in Hex
+  wifiManager.addParameter(&custom_mqtt_server);
+  wifiManager.addParameter(&custom_mqtt_port);
+  wifiManager.addParameter(&custom_mqtt_user);
+  wifiManager.addParameter(&custom_mqtt_password);
+  wifiManager.addParameter(&custom_inverterID);
+  
+  if (timeout > 0){
+    // timeout shall be set
+    wifiManager.setConfigPortalTimeout(timeout);
+
+    // This is an "if" and not a "while" to let the timeout stop WiFiManager and continue. 
+    // Usecase: WiFi-config correct but not reachable right now.
+    // This leaves the once working WiFi config configured and will reconnect when the APs come back.
+    if (!wifiManager.startConfigPortal("OpenNETek", "opennetek!")) {
+      // returns false when timeout is reached or connect to given Wifi didn't work.
+      Serial.print("Renewing configuration wasn't successful, either because it couldn't connect to the given WiFi or because the timeout was reached.");
+      }
+    } else {
+      // timeout is 0
+      // Initial Configuration starts WiFiManager with timeout 0, a working Wifi config is mandatory.
+      while (!wifiManager.autoConnect("OpenNETek", "opennetek!")) {
+        Serial.print("Could not connect to specified SSID. Launching WifiManager again.");
+        config_changed = true;
+        }
+    }
+
+  
+  
+  if (ssid == wifiManager.getWiFiSSID() && pass == wifiManager.getWiFiPass()) {
+      // didn't get new Wifi credentials
+      Serial.print("Saved credentials are the same as the set from WifiManager");
+    }
+    else {
+      // got new Wifi config
+      Serial.print("Saved credentials are different from the set from WifiManager");
+      config_changed = true;
+      ssid = wifiManager.getWiFiSSID();
+      pass = wifiManager.getWiFiPass();
+    }
+  
+
+  strcpy (mqtt_server, custom_mqtt_server.getValue() );
+  mqtt_port = strtol(custom_mqtt_port.getValue(),NULL,10);
+  strcpy (mqtt_user, custom_mqtt_user.getValue() );
+  strcpy (mqtt_password, custom_mqtt_password.getValue() );
+  inverterID = strtol(custom_inverterID.getValue(),NULL,16);
+  Serial.print("saving inverterID as ");
+  Serial.print(inverterID,16);
+  // didn't help with releasing the socket on port 80
+  // wifiManager.server.release();
+
+  // save the custom parameters to FS
+  Serial.println("saving config");
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& json = jsonBuffer.createObject();
+  json["wifi_ssid"] = ssid;
+  json["wifi_pass"] = pass;
+  json["mqtt_server"] = mqtt_server;
+  json["mqtt_port"] = mqtt_port;
+  json["mqtt_user"] = mqtt_user;
+  json["mqtt_password"] = mqtt_password;
+  json["custom_inverterID"] = inverterID;
+
+  File configFile = SPIFFS.open("/config.json", "w");
+  if (!configFile) {
+    Serial.println("failed to open config file for writing");
+  }
+
+  json.printTo(Serial);
+  json.printTo(configFile);
+  configFile.close();
+  delay(1000);
+
+  //end save
+  // wanted to only restart if config_changed, but need to
+  // restart to free up port 80 and avoid AsyncTCP.cpp:1268] begin(): bind error: -8
+  ESP.restart();
+
+}
 
 
 // Return OpenNETek/<inverterID>/<parameter
@@ -613,61 +708,8 @@ void setup()
       // there is no configfile in the filesystem
       // lets get wifimanager to get us some config
 
-      // WifiManager stuff
-      WiFiManager wifiManager;
-      // uncomment to delete WiFi settings after each Reset.
-      wifiManager.resetSettings();
-      wifiManager.setDebugOutput(true);
-      WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
-      WiFiManagerParameter custom_mqtt_port("port", "mqtt port", "1883", 6);
-      WiFiManagerParameter custom_mqtt_user("user", "mqtt user", mqtt_user, 32);
-      WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 32);
-      WiFiManagerParameter custom_inverterID("InverterID", "InverterID","" , 8); // as printed on the label of the inverter which is in Hex
-      wifiManager.addParameter(&custom_mqtt_server);
-      wifiManager.addParameter(&custom_mqtt_port);
-      wifiManager.addParameter(&custom_mqtt_user);
-      wifiManager.addParameter(&custom_mqtt_password);
-      wifiManager.addParameter(&custom_inverterID);
-      
-      while (!wifiManager.autoConnect("OpenNETek", "opennetek!")) {
-        Serial.print("Could not connect to specified SSID. Launching WifiManager again.");
-      }
-      ssid = wifiManager.getWiFiSSID();
-      pass = wifiManager.getWiFiPass();
-
-      strcpy (mqtt_server, custom_mqtt_server.getValue() );
-      mqtt_port = strtol(custom_mqtt_port.getValue(),NULL,10);
-      strcpy (mqtt_user, custom_mqtt_user.getValue() );
-      strcpy (mqtt_password, custom_mqtt_password.getValue() );
-      inverterID = strtol(custom_inverterID.getValue(),NULL,16);
-      Serial.print("saving inverterID as ");
-      Serial.print(inverterID,16);
-      // didn't help with releasing the socket on port 80
-      // wifiManager.server.release();
-
-      // save the custom parameters to FS
-      Serial.println("saving config");
-      DynamicJsonBuffer jsonBuffer;
-      JsonObject& json = jsonBuffer.createObject();
-      json["wifi_ssid"] = ssid;
-      json["wifi_pass"] = pass;
-      json["mqtt_server"] = mqtt_server;
-      json["mqtt_port"] = mqtt_port;
-      json["mqtt_user"] = mqtt_user;
-      json["mqtt_password"] = mqtt_password;
-      json["custom_inverterID"] = inverterID;
-
-      File configFile = SPIFFS.open("/config.json", "w");
-      if (!configFile) {
-        Serial.println("failed to open config file for writing");
-      }
-
-      json.printTo(Serial);
-      json.printTo(configFile);
-      configFile.close();
-      //end save
-      // restart to free up port 80 and avoid AsyncTCP.cpp:1268] begin(): bind error: -8
-      ESP.restart();
+      // start WifiManager Config Portal without timeout
+      do_wifi_config(0);
     }
 
   } else {
@@ -681,14 +723,31 @@ void setup()
     }
   }
   // connect to saved Wifi
-  WiFi.disconnect(true);
+  // WiFi.disconnect(true);
+
+  
+  // Connect to Wifi with ssid with pass
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  Serial.print("Connecting");
+
+  // If still not connected after 30 seconds, offer a WiFi reconfig through WifiManager with a 10 Minute timeout
+  for (int i = 0; WiFi.status() != WL_CONNECTED; i++) {
+    Serial.print('.');
+    
+    if (i==30){
+      // waited already 30 seconds, maybe WiFI-config is just not working. Offering a change through WiFiManager, rebooting afterwards
+      WiFi.removeEvent(WiFiEvent);
+      WiFi.disconnect(false);
+      do_wifi_config(600);
+    }
+    delay(1000);
+  }
+  // we get here only when WiFi is connected. yay.
+
+  // Start WiFi Monitoring
   WiFi.onEvent(WiFiEvent);
   // only STA mode needed
-  //WiFi.mode(WIFI_MODE_STA);
   WiFi.mode(WIFI_MODE_STA);
-  WiFi.begin(ssid.c_str(), pass.c_str());
-
-   
 
   strcpy(hostname,mqtt_topic);
   
@@ -862,7 +921,7 @@ uint32_t lastSendMillis = 0;
 void loop()
 {
 const uint32_t currentMillis = millis();
-if (currentMillis - lastSendMillis > 2000)
+if (currentMillis - lastSendMillis > 4000)
   {
   lastSendMillis = currentMillis;
     
