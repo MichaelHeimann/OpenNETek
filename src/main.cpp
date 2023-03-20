@@ -198,16 +198,34 @@ void recvMsg(uint8_t *data, size_t len){
   }
 }
 
-constexpr const uint8_t PROG_PIN = 4; /// Programming enable pin of RF module (needed?)
-constexpr const uint8_t RX_PIN = 16; /// RX pin (of RF module)
-constexpr const uint8_t TX_PIN = 17; /// TX pin (of RF module)
+#ifdef ESP32WROOM
+        // Code to be compiled for ESP32WROOM32
+        constexpr const uint8_t RX_PIN = 16; /// RX pin
+        constexpr const uint8_t TX_PIN = 17; /// TX pin
+        #define clientSerial Serial2
+#endif
+
+#ifdef ESP32C3
+        // Code to be compiled for ESP32C3
+        constexpr const uint8_t RX_PIN = 9; /// RX pin 
+        constexpr const uint8_t TX_PIN = 10; /// TX pin 
+        #define clientSerial Serial1 /// ESP32C3 does not have Serial2. Serial1 should work on GPIO9 and 10.
+
+
+#endif
+
+
+constexpr const uint8_t PROG_PIN = 4; /// Programming enable pin of RF module (not needed when replacing LC12S with ESP)
+
 //constexpr const uint32_t inverterID = 0x38004044; /// Identifier of your inverter (see label on inverter)
 
 
+NETSGPClient pvclient(clientSerial, PROG_PIN); /// NETSGPClient instance
+  
 
 
 
-NETSGPClient pvclient(Serial2, PROG_PIN); /// NETSGPClient instance
+
 
 
 // Start WifiManager Config Portal. unsigned long as a Parameter, zero for no timeout.
@@ -634,12 +652,17 @@ if (!!window.EventSource) {
 void setup()
 {
   Serial.begin(9600);
-  Serial2.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
-  delay(1000);
   Serial.println("Setup ...");
-  // saving Power (startup was unreliable without that)
-  setCpuFrequencyMhz(160);
 
+  clientSerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+  delay(1000);
+
+  #ifdef ESP32WROOM
+    // saving Power on ESP32 WROOM since startup was unreliable without that
+    // ESP32C3 is anyways running at 160MHz
+    setCpuFrequencyMhz(160);
+  #endif
+  
   esp_err_t err;
   err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
   if (err == !ESP_OK) {
