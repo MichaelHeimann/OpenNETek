@@ -15,7 +15,7 @@
 #include <ESPmDNS.h>
 #define LED 2
 
-//Optionen Start
+//Options start
 
 // Add your MQTT Broker Data:
 char mqtt_server[40];     //mqtt Broker ip
@@ -29,7 +29,7 @@ uint32_t inverterID = 0; // will contain the identifier of your inverter (see la
 // Hostname of the ESP32 itself
 char hostname[20];
 
-// WiFi Variablen in denen die Werte vom Config POST gespeichert werden
+// WiFi variables for config HTTP POST.
 String ssid;
 String pass;
 
@@ -92,7 +92,7 @@ void WiFiEvent(WiFiEvent_t event){
 // Proper Wifi Managment functions end here
 
 
-//Optionen End
+//options end
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -110,20 +110,13 @@ const char* PARAM_INPUT_7 = "inverter-id";
 const char* PARAM_INPUT_8 = "reset";
 
 
-
-
-
-// Timer variables
-unsigned long lastTime = 0;  
-unsigned long timerDelay = 30000;
-
-WiFiClient espClient;
+WiFiClient espClient; /// WiFiClient for MQTT
 PubSubClient mqtt(espClient);
 long lastMsg = 0;
 char msg[50];
 int value = 0;
 
-//Variable für mqtt
+//variables for mqtt
 float temperature = 0;
 float dcVoltage1 = 0;
 float dcCurrent1 = 0;
@@ -152,15 +145,50 @@ void callback(char* topic, byte* message, unsigned int length) {
 
   // If a message is received on the topic esp32/output, you check if the message is either "on" or "off". 
   // Changes the output state according to the message
-  if (String(topic) == "esp32/output") {
+  if (String(topic) == get_mqtt_topic("/led")) {
     Serial.print("Changing output to ");
     if(messageTemp == "on"){
       Serial.println("on");
- //     digitalWrite(ledPin, HIGH);
+      digitalWrite(LED, HIGH);
     }
     else if(messageTemp == "off"){
       Serial.println("off");
-//      digitalWrite(ledPin, LOW);
+      digitalWrite(LED, LOW);
+    }
+  }
+  if (String(topic) == get_mqtt_topic("/powerlevel")) {
+    Serial.print("Trying to set Powerlevel to ");
+    Serial.println(messageTemp);
+    int powerlevel;
+    NETSGPClient::PowerGrade pg;
+    powerlevel = strtol(messageTemp.c_str(),NULL,10);
+    if (powerlevel >= 0 && powerlevel <=100){
+      pg = static_cast<NETSGPClient::PowerGrade>(powerlevel); // convert int "powerlevel" to PowerGrade "pg"
+      if (pvclient.setPowerGrade(inverterID,pg)){
+        Serial.println("Successfully set PowerGrade.");
+      }
+      else {
+        Serial.println("Could not set PowerGrade.");
+      }
+    } else {
+        Serial.print(powerlevel);
+        Serial.println( "ist kein gültiger Powerlevel in Prozent (0 - 100)");
+    }
+  }
+  if (String(topic) == get_mqtt_topic("/activate")) {
+    if(messageTemp == "on"){
+      Serial.println("Activating Inverter.");
+      pvclient.activate(inverterID,true);
+    }
+    else if(messageTemp == "off"){
+      Serial.println("Deactivating Inverter.");
+      pvclient.activate(inverterID,false);
+    }
+  }
+  if (String(topic) == get_mqtt_topic("/reboot")) {
+    if(messageTemp == "on"){
+      Serial.println("Rebooting Inverter.");
+      pvclient.reboot(inverterID);
     }
   }
 }
@@ -169,10 +197,13 @@ void reconnect() {
   while (!mqtt.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
-    if (mqtt.connect("ESP32Client")) {
+    if (mqtt.connect(hostname)) {
       Serial.println("connected");
       // Subscribe
-      mqtt.subscribe("esp32/output");
+      mqtt.subscribe(get_mqtt_topic("/led"));
+      mqtt.subscribe(get_mqtt_topic("/powerlevel"));
+      mqtt.subscribe(get_mqtt_topic("/activate"));
+      mqtt.subscribe(get_mqtt_topic("/reboot"));
     } else {
       Serial.print("failed, rc=");
       Serial.print(mqtt.state());
@@ -217,16 +248,7 @@ void recvMsg(uint8_t *data, size_t len){
 
 constexpr const uint8_t PROG_PIN = 4; /// Programming enable pin of RF module (not needed when replacing LC12S with ESP)
 
-//constexpr const uint32_t inverterID = 0x38004044; /// Identifier of your inverter (see label on inverter)
-
-
 NETSGPClient pvclient(clientSerial, PROG_PIN); /// NETSGPClient instance
-  
-
-
-
-
-
 
 // Start WifiManager Config Portal. unsigned long as a Parameter, zero for no timeout.
 void do_wifi_config(const unsigned long &timeout){
@@ -313,7 +335,7 @@ void do_wifi_config(const unsigned long &timeout){
   json.printTo(Serial);
   json.printTo(configFile);
   configFile.close();
-  delay(1000);
+  Serial.println("config.json saved - restarting with new config.");
 
   //end save
   // wanted to only restart if config_changed, but need to
@@ -655,7 +677,7 @@ void setup()
   Serial.println("Setup ...");
 
   clientSerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
-  delay(1000);
+  //delay(1000); // candidate for removal. delays are evil
 
   #ifdef ESP32WROOM
     // saving Power on ESP32 WROOM since startup was unreliable without that
@@ -892,7 +914,7 @@ void setup()
           
         //end save
         request->send(200, "text/plain", "Done. ESP will restart with the new settings");
-        delay(3000);
+        // delay(3000); //think we don't need to wait here
         ESP.restart();
       }
     }
@@ -924,7 +946,7 @@ void setup()
   if ( sizeof(mqtt_server) ) {
     mqtt.setServer(mqtt_server, mqtt_port);
     mqtt.setCallback(callback);
-   (mqtt.connect("PV", mqtt_user, mqtt_password));
+   (mqtt.connect(hostname, mqtt_user, mqtt_password));
 
   }
   
