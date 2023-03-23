@@ -128,6 +128,37 @@ float temperature1 = 0;
 float totalGeneratedPower1 = 0;
 float state1 = 0;
 
+// Return OpenNETek/<inverterID>/<parameter
+char* get_mqtt_topic(const char* subdir){
+  //memset(&subdir[0], 0, sizeof(subdir));
+
+  char* topic_tmp = new char[50];
+  strncpy(topic_tmp, mqtt_topic, sizeof(mqtt_topic));
+  strncat(topic_tmp, subdir, sizeof(subdir));
+
+  return topic_tmp;
+}
+
+#ifdef ESP32WROOM
+        // Code to be compiled for ESP32WROOM32
+        constexpr const uint8_t RX_PIN = 16; /// RX pin
+        constexpr const uint8_t TX_PIN = 17; /// TX pin
+        #define clientSerial Serial2
+#endif
+
+#ifdef ESP32C3
+        // Code to be compiled for ESP32C3
+        constexpr const uint8_t RX_PIN = 9; /// RX pin 
+        constexpr const uint8_t TX_PIN = 10; /// TX pin 
+        #define clientSerial Serial1 /// ESP32C3 does not have Serial2. Serial1 should work on GPIO9 and 10.
+
+
+#endif
+
+
+constexpr const uint8_t PROG_PIN = 4; /// Programming enable pin of RF module (not needed when replacing LC12S with ESP)
+
+NETSGPClient pvclient(clientSerial, PROG_PIN); /// NETSGPClient instance
 
 void callback(char* topic, byte* message, unsigned int length) {
   Serial.print("Message arrived on topic: ");
@@ -192,13 +223,16 @@ void callback(char* topic, byte* message, unsigned int length) {
     }
   }
 }
+
 void reconnect() {
   // Loop until we're reconnected
   while (!mqtt.connected()) {
     Serial.print("Attempting MQTT connection...");
+    //WebSerial.print("Attempting MQTT connection...");
     // Attempt to connect
     if (mqtt.connect(hostname)) {
       Serial.println("connected");
+      //WebSerial.print("Attempting MQTT connection...");
       // Subscribe
       mqtt.subscribe(get_mqtt_topic("/led"));
       mqtt.subscribe(get_mqtt_topic("/powerlevel"));
@@ -206,7 +240,10 @@ void reconnect() {
       mqtt.subscribe(get_mqtt_topic("/reboot"));
     } else {
       Serial.print("failed, rc=");
+      //WebSerial.print("failed, rc=");
+
       Serial.print(mqtt.state());
+      //WebSerial.print(mqtt.state());
       Serial.println(" try again in 5 seconds");
       // Wait 5 seconds before retrying
       delay(5000);
@@ -229,26 +266,7 @@ void recvMsg(uint8_t *data, size_t len){
   }
 }
 
-#ifdef ESP32WROOM
-        // Code to be compiled for ESP32WROOM32
-        constexpr const uint8_t RX_PIN = 16; /// RX pin
-        constexpr const uint8_t TX_PIN = 17; /// TX pin
-        #define clientSerial Serial2
-#endif
 
-#ifdef ESP32C3
-        // Code to be compiled for ESP32C3
-        constexpr const uint8_t RX_PIN = 9; /// RX pin 
-        constexpr const uint8_t TX_PIN = 10; /// TX pin 
-        #define clientSerial Serial1 /// ESP32C3 does not have Serial2. Serial1 should work on GPIO9 and 10.
-
-
-#endif
-
-
-constexpr const uint8_t PROG_PIN = 4; /// Programming enable pin of RF module (not needed when replacing LC12S with ESP)
-
-NETSGPClient pvclient(clientSerial, PROG_PIN); /// NETSGPClient instance
 
 // Start WifiManager Config Portal. unsigned long as a Parameter, zero for no timeout.
 void do_wifi_config(const unsigned long &timeout){
@@ -345,16 +363,7 @@ void do_wifi_config(const unsigned long &timeout){
 }
 
 
-// Return OpenNETek/<inverterID>/<parameter
-char* get_mqtt_topic(const char* subdir){
-  //memset(&subdir[0], 0, sizeof(subdir));
 
-  char* topic_tmp = new char[50];
-  strncpy(topic_tmp, mqtt_topic, sizeof(mqtt_topic));
-  strncat(topic_tmp, subdir, sizeof(subdir));
-
-  return topic_tmp;
-}
 
 
 String processor(const String& var){
@@ -788,6 +797,7 @@ void setup()
     delay(1000);
   }
   // we get here only when WiFi is connected. yay.
+  wifi_connected = true; // wasn't set by the event yet, since that's not yet started
 
   // Start WiFi Monitoring
   WiFi.onEvent(WiFiEvent);
@@ -1035,9 +1045,13 @@ if (currentMillis - lastSendMillis > 4000)
     // do the mqtt thing if MQTT server is given and Wifi is connected
     if ( sizeof(mqtt_server) && wifi_connected ) 
       {
+      //WebSerial.println("MQTT part beginning...");
+
       if (!mqtt.connected()) 
         {
         Serial.println("MQTT not connected. Reconecting...");
+        //WebSerial.print("MQTT not connected. Reconecting...");
+
         reconnect();
         }
       mqtt.loop();
@@ -1116,7 +1130,7 @@ if (currentMillis - lastSendMillis > 4000)
     Serial.print("Received no Inverter Status from ");
     Serial.println(inverterID,16);
 
-    //WebSerial.print("Received no Inverter Status from ");
+    //WebSerial.print("Received no Inverter Status from (ID printed with base10) ");
     //WebSerial.println(inverterID);
     
     }
