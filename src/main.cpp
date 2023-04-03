@@ -8,12 +8,33 @@
 #include <WiFiManager.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-//#include <WebSerial.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h> 
 #include <AsyncElegantOTA.h>
 #include <ESPmDNS.h>
 #define LED 2
+#define DEBUGING 0
+#define WEBSERIAL 0
+
+#if WEBSERIAL == 1
+#include <WebSerial.h>
+#define webdebug(x) WebSerial.print(x) 
+#define webdebugln(x) WebSerial.println(x)
+#else
+#define webdebug(x) 
+#define webdebugln(x)
+#endif
+
+#if DEBUGING == 1
+// using Serial for debugging output only when DEBUG is 1
+#define debug(x) Serial.print(x) 
+#define debugln(x) Serial.println(x)
+#define debugln2(x,y) Serial.println(x,y)
+#else
+#define debug(x)
+#define debugln(x)
+#define debugln2(x,y)
+#endif
 
 //Options start
 
@@ -40,7 +61,7 @@ String pass;
 static volatile bool wifi_connected = false;
 
 void wifiOnDisconnect(){
-    Serial.println("STA Disconnected");
+    debugln("STA Disconnected");
     delay(1000);
     WiFi.begin(ssid.c_str(), pass.c_str());
 }
@@ -62,21 +83,21 @@ void WiFiEvent(WiFiEvent_t event){
             break;
         case ARDUINO_EVENT_WIFI_STA_CONNECTED:
             //enable sta ipv6 here
-            Serial.println("Connected to Wifi.");
+            debugln("Connected to Wifi.");
             WiFi.enableIpV6();
             break;
         case ARDUINO_EVENT_WIFI_STA_GOT_IP6:
-            Serial.print("STA IPv6: ");
-            Serial.println(WiFi.localIPv6());
+            debug("STA IPv6: ");
+            debugln(WiFi.localIPv6());
             wifi_connected = true; // IPv6 is sufficient to be "connected"
             break;
         case ARDUINO_EVENT_WIFI_AP_GOT_IP6:
-            Serial.print("AP IPv6: ");
-            Serial.println(WiFi.softAPIPv6());
+            debug("AP IPv6: ");
+            debugln(WiFi.softAPIPv6());
             break;
         case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-            Serial.print("STA IPv4: ");
-            Serial.println(WiFi.localIP());
+            debug("STA IPv4: ");
+            debugln(WiFi.localIP());
             wifi_connected = true;
             break;
         case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
@@ -161,64 +182,64 @@ constexpr const uint8_t PROG_PIN = 4; /// Programming enable pin of RF module (n
 NETSGPClient pvclient(clientSerial, PROG_PIN); /// NETSGPClient instance
 
 void callback(char* topic, byte* message, unsigned int length) {
-  Serial.print("Message arrived on topic: ");
-  Serial.print(topic);
-  Serial.print(". Message: ");
+  debug("Message arrived on topic: ");
+  debug(topic);
+  debug(". Message: ");
   String messageTemp;
   
   for (int i = 0; i < length; i++) {
-    Serial.print((char)message[i]);
+    debug((char)message[i]);
     messageTemp += (char)message[i];
   }
-  Serial.println();
+  debugln();
 
   // Feel free to add more if statements to control more GPIOs with MQTT
 
   // If a message is received on the topic esp32/output, you check if the message is either "on" or "off". 
   // Changes the output state according to the message
   if (String(topic) == get_mqtt_topic("/led")) {
-    Serial.print("Changing output to ");
+    debug("Changing output to ");
     if(messageTemp == "on"){
-      Serial.println("on");
+      debugln("on");
       digitalWrite(LED, HIGH);
     }
     else if(messageTemp == "off"){
-      Serial.println("off");
+      debugln("off");
       digitalWrite(LED, LOW);
     }
   }
   if (String(topic) == get_mqtt_topic("/powerlevel")) {
-    Serial.print("Trying to set Powerlevel to ");
-    Serial.println(messageTemp);
+    debug("Trying to set Powerlevel to ");
+    debugln(messageTemp);
     int powerlevel;
     NETSGPClient::PowerGrade pg;
     powerlevel = strtol(messageTemp.c_str(),NULL,10);
     if (powerlevel >= 0 && powerlevel <=100){
       pg = static_cast<NETSGPClient::PowerGrade>(powerlevel); // convert int "powerlevel" to PowerGrade "pg"
       if (pvclient.setPowerGrade(inverterID,pg)){
-        Serial.println("Successfully set PowerGrade.");
+        debugln("Successfully set PowerGrade.");
       }
       else {
-        Serial.println("Could not set PowerGrade.");
+        debugln("Could not set PowerGrade.");
       }
     } else {
-        Serial.print(powerlevel);
-        Serial.println( "ist kein gültiger Powerlevel in Prozent (0 - 100)");
+        debug(powerlevel);
+        debugln( "ist kein gültiger Powerlevel in Prozent (0 - 100)");
     }
   }
   if (String(topic) == get_mqtt_topic("/activate")) {
     if(messageTemp == "on"){
-      Serial.println("Activating Inverter.");
+      debugln("Activating Inverter.");
       pvclient.activate(inverterID,true);
     }
     else if(messageTemp == "off"){
-      Serial.println("Deactivating Inverter.");
+      debugln("Deactivating Inverter.");
       pvclient.activate(inverterID,false);
     }
   }
   if (String(topic) == get_mqtt_topic("/reboot")) {
     if(messageTemp == "on"){
-      Serial.println("Rebooting Inverter.");
+      debugln("Rebooting Inverter.");
       pvclient.reboot(inverterID);
     }
   }
@@ -227,24 +248,24 @@ void callback(char* topic, byte* message, unsigned int length) {
 void reconnect() {
   // Loop until we're reconnected
   while (!mqtt.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    //WebSerial.print("Attempting MQTT connection...");
+    debug("Attempting MQTT connection...");
+    webdebug("Attempting MQTT connection...");
     // Attempt to connect
     if (mqtt.connect(hostname)) {
-      Serial.println("connected");
-      //WebSerial.print("Attempting MQTT connection...");
+      debugln("connected");
+      webdebug("Attempting MQTT connection...");
       // Subscribe
       mqtt.subscribe(get_mqtt_topic("/led"));
       mqtt.subscribe(get_mqtt_topic("/powerlevel"));
       mqtt.subscribe(get_mqtt_topic("/activate"));
       mqtt.subscribe(get_mqtt_topic("/reboot"));
     } else {
-      Serial.print("failed, rc=");
-      //WebSerial.print("failed, rc=");
+      debug("failed, rc=");
+      webdebug("failed, rc=");
 
-      Serial.print(mqtt.state());
-      //WebSerial.print(mqtt.state());
-      Serial.println(" try again in 5 seconds");
+      debug(mqtt.state());
+      webdebug(mqtt.state());
+      debugln(" try again in 5 seconds");
       // Wait 5 seconds before retrying
       delay(5000);
     }
@@ -252,12 +273,12 @@ void reconnect() {
 }
 
 void recvMsg(uint8_t *data, size_t len){
-  //WebSerial.println("Received Data...");
+  webdebugln("Received Data...");
   String d = "";
   for(int i=0; i < len; i++){
     d += char(data[i]);
   }
-  //WebSerial.println(d);
+  webdebugln(d);
   if (d == "ON"){
     digitalWrite(LED, HIGH);
   }
@@ -297,13 +318,13 @@ void do_wifi_config(const unsigned long &timeout){
     // This leaves the once working WiFi config configured and will reconnect when the APs come back.
     if (!wifiManager.startConfigPortal("OpenNETek", "opennetek!")) {
       // returns false when timeout is reached or connect to given Wifi didn't work.
-      Serial.print("Renewing configuration wasn't successful, either because it couldn't connect to the given WiFi or because the timeout was reached.");
+      debugln("Renewing configuration wasn't successful, either because it couldn't connect to the given WiFi or because the timeout was reached.");
       }
     } else {
       // timeout is 0
       // Initial Configuration starts WiFiManager with timeout 0, a working Wifi config is mandatory.
       while (!wifiManager.autoConnect("OpenNETek", "opennetek!")) {
-        Serial.print("Could not connect to specified SSID. Launching WifiManager again.");
+        debugln("Could not connect to specified SSID. Launching WifiManager again.");
         config_changed = true;
         }
     }
@@ -312,11 +333,11 @@ void do_wifi_config(const unsigned long &timeout){
   
   if (ssid == wifiManager.getWiFiSSID() && pass == wifiManager.getWiFiPass()) {
       // didn't get new Wifi credentials
-      Serial.print("Saved credentials are the same as the set from WifiManager");
+      debugln("Saved credentials are the same as the set from WifiManager");
     }
     else {
       // got new Wifi config
-      Serial.print("Saved credentials are different from the set from WifiManager");
+      debugln("Saved credentials are different from the set from WifiManager");
       config_changed = true;
       ssid = wifiManager.getWiFiSSID();
       pass = wifiManager.getWiFiPass();
@@ -328,13 +349,13 @@ void do_wifi_config(const unsigned long &timeout){
   strcpy (mqtt_user, custom_mqtt_user.getValue() );
   strcpy (mqtt_password, custom_mqtt_password.getValue() );
   inverterID = strtol(custom_inverterID.getValue(),NULL,16);
-  Serial.print("saving inverterID as ");
-  Serial.print(inverterID,16);
+  debug("saving inverterID as ");
+  debugln2(inverterID,16);
   // didn't help with releasing the socket on port 80
   // wifiManager.server.release();
 
   // save the custom parameters to FS
-  Serial.println("saving config");
+  debugln("saving config");
   DynamicJsonBuffer jsonBuffer;
   JsonObject& json = jsonBuffer.createObject();
   json["wifi_ssid"] = ssid;
@@ -347,13 +368,13 @@ void do_wifi_config(const unsigned long &timeout){
 
   File configFile = SPIFFS.open("/config.json", "w");
   if (!configFile) {
-    Serial.println("failed to open config file for writing");
+    debugln("failed to open config file for writing");
   }
 
   json.printTo(Serial);
   json.printTo(configFile);
   configFile.close();
-  Serial.println("config.json saved - restarting with new config.");
+  debugln("config.json saved - restarting with new config.");
 
   //end save
   // wanted to only restart if config_changed, but need to
@@ -368,9 +389,8 @@ void do_wifi_config(const unsigned long &timeout){
 
 String processor(const String& var){
   {
-  Serial.println("processor called");
+  debugln("processor called");
 
-  //Serial.println("Inverter function returned");
   if(var == "DC_Voltage"){
     return String(dcVoltage1);
     }
@@ -399,7 +419,7 @@ String processor(const String& var){
     return String(state1);
     }
 
-  //Serial.println("default catchall return is coming...");
+  //default catchall
   return String();
   }
 }
@@ -423,7 +443,7 @@ String config_processor(const String& var){
     return String(inverterID, 16);
     }
 
-  //Serial.println("default catchall return is coming...");
+  //default catchall
   return String();
   }
 }
@@ -683,7 +703,7 @@ if (!!window.EventSource) {
 void setup()
 {
   Serial.begin(9600);
-  Serial.println("Setup ...");
+  Serial.println("Setup starting ...");
 
   clientSerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
   //delay(1000); // candidate for removal. delays are evil
@@ -697,7 +717,7 @@ void setup()
   esp_err_t err;
   err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
   if (err == !ESP_OK) {
-    Serial.println("ERROR: Could not prevent persistant storage of Wifi Credentials in NVS.");
+    debugln("ERROR: Could not prevent persistant storage of Wifi Credentials in NVS.");
   }
 
   // Config for all bug wifi-ssid and wifi-password is saved in filesystem
@@ -707,16 +727,16 @@ void setup()
   //clean FS, for testing
   //SPIFFS.format();
 
-  Serial.println("mounting FS...");
+  debugln("mounting FS...");
   
   if (SPIFFS.begin()) {
-    Serial.println("mounted file system");
+    debugln("mounted file system");
     if (SPIFFS.exists("/config.json")) {
       //file exists, reading and loading
-      Serial.println("reading config file");
+      debugln("reading config file");
       File configFile = SPIFFS.open("/config.json", "r");
       if (configFile) {
-        Serial.println("opened config file");
+        debugln("opened config file");
         size_t size = configFile.size();
         // Allocate a buffer to store contents of the file.
         std::unique_ptr<char[]> buf(new char[size]);
@@ -726,36 +746,36 @@ void setup()
         JsonObject& json = jsonBuffer.parseObject(buf.get());
         json.printTo(Serial);
         if (json.success()) {
-          Serial.println("\nparsed json");
+          debugln("\nparsed json");
           ssid = json["wifi_ssid"].as<char*>();
-          Serial.print("wifi SSID = ");
-          Serial.println(ssid);
+          debug("wifi SSID = ");
+          debugln(ssid);
           pass = json["wifi_pass"].as<char*>();
-          Serial.print("Wifi password = ");
-          Serial.println(pass);
+          debug("Wifi password = ");
+          debugln(pass);
           strcpy(mqtt_server, json["mqtt_server"]);
-          Serial.print("mqtt_server = ");
-          Serial.println(mqtt_server);
+          debug("mqtt_server = ");
+          debugln(mqtt_server);
           mqtt_port = strtol(json["mqtt_port"],NULL,10);
-          Serial.print("mqtt_port = ");
-          Serial.println(mqtt_port,10);
+          debug("mqtt_port = ");
+          debugln2(mqtt_port,10);
           strcpy(mqtt_user, json["mqtt_user"]);
-          Serial.print("mqtt_user = ");
-          Serial.println(mqtt_user);
+          debug("mqtt_user = ");
+          debugln(mqtt_user);
           strcpy(mqtt_password, json["mqtt_password"]);
-          Serial.print("mqtt_password = ");
-          Serial.println(mqtt_password);
+          debug("mqtt_password = ");
+          debugln(mqtt_password);
           inverterID = strtol(json["custom_inverterID"],NULL,10);
           // Create mqtt base-topic as "OpenNETek/<InverterID>"  
           char buffer[9];
           sprintf(buffer, "%x", inverterID);
           strncpy(mqtt_topic, "OpenNETek/", sizeof("OpenNETek/"));
           strncat(mqtt_topic, buffer, sizeof(buffer));
-          Serial.print("inverterID = ");
-          Serial.println(inverterID,16);
+          debug("inverterID = ");
+          debugln2(inverterID,16);
 
         } else {
-          Serial.println("failed to load json config");
+          debugln("failed to load json config");
         }
       }
     } else {
@@ -767,26 +787,23 @@ void setup()
     }
 
   } else {
-    Serial.println("failed to mount FS");
-    Serial.println("Trying to format...");
+    debugln("failed to mount FS");
+    debugln("Trying to format...");
     if (SPIFFS.format()) {
-      Serial.println("Formatting successful! Restarting...");
+      debugln("Formatting successful! Restarting...");
       ESP.restart();
     } else {
-      Serial.println("Formatting not successful!");
+      debugln("Formatting not successful!");
     }
   }
-  // connect to saved Wifi
-  // WiFi.disconnect(true);
-
   
   // Connect to Wifi with ssid with pass
   WiFi.begin(ssid.c_str(), pass.c_str());
-  Serial.print("Connecting");
+  debug("Connecting");
 
   // If still not connected after 30 seconds, offer a WiFi reconfig through WifiManager with a 10 Minute timeout
   for (int i = 0; WiFi.status() != WL_CONNECTED; i++) {
-    Serial.print('.');
+    debug('.');
     
     if (i==30){
       // waited already 30 seconds, maybe WiFI-config is just not working. Offering a change through WiFiManager, rebooting afterwards
@@ -810,19 +827,16 @@ void setup()
   hostname[9]='-';
 
   if (!MDNS.begin(hostname)) {
-    Serial.println("Error setting up MDNS responder!");
+    debugln("Error setting up MDNS responder!");
   }
-  Serial.println("mDNS responder started");
+  debugln("mDNS responder started");
 
 
-
-  // Serial.println("Welcome to Micro Inverter Interface by ATCnetz.de and enwi.one");
-
-  // WebSerial is accessible at "<IP Address>/webserial" in browser
-
-  // disabled for release, maybe reenable for troubleshooting?
-  //WebSerial.begin(&server);
-  //WebSerial.msgCallback(recvMsg);
+  #if WEBSERIAL == 1
+    // WebSerial is accessible at "<IP Address>/webserial" in browser
+    WebSerial.begin(&server);
+    WebSerial.msgCallback(recvMsg);
+  #endif
 
   // Handle Web Server for /
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -845,61 +859,60 @@ void setup()
         // HTTP POST Wifi SSID value
         if (p->name() == PARAM_INPUT_1) {
           ssid = p->value().c_str();
-          Serial.print("SSID set to: ");
-          Serial.println(ssid);
+          debug("SSID set to: ");
+          debugln(ssid);
         }
         // HTTP POST Wifi password value
         if (p->name() == PARAM_INPUT_2) {
           pass = p->value().c_str();
-          Serial.print("Password set to: ");
-          Serial.println(pass);
+          debug("Password set to: ");
+          debugln(pass);
         }
         // HTTP POST MQTT server value
         if (p->name() == PARAM_INPUT_3) {
           strcpy(mqtt_server, p->value().c_str());
-          Serial.print("MQTT server set to: ");
-          Serial.println(mqtt_server);
+          debug("MQTT server set to: ");
+          debugln(mqtt_server);
         }
         // HTTP POST MQTT port value
         if (p->name() == PARAM_INPUT_4) {
           mqtt_port = strtol(p->value().c_str(),NULL,10);
-          Serial.print("MQTT port set to: ");
-          Serial.println(mqtt_port,10);
+          debug("MQTT port set to: ");
+          debugln2(mqtt_port,10);
         }
         // HTTP POST MQTT username value
         if (p->name() == PARAM_INPUT_5) {
           strcpy(mqtt_user, p->value().c_str());
-          Serial.print("MQTT username set to: ");
-          Serial.println(mqtt_user);
+          debug("MQTT username set to: ");
+          debugln(mqtt_user);
         }
         // HTTP POST MQTT password value
         if (p->name() == PARAM_INPUT_6) {
           strcpy(mqtt_password, p->value().c_str());
-          Serial.print("MQTT password set to: ");
-          Serial.println(mqtt_password);
+          debug("MQTT password set to: ");
+          debugln(mqtt_password);
         }
         // HTTP POST inverter-ID value
         if (p->name() == PARAM_INPUT_7) {
           inverterID = strtol(p->value().c_str(),NULL,16);
-          Serial.print("Inverter ID set to: ");
-          Serial.println(inverterID,16);
+          debug("Inverter ID set to: ");
+          debugln2(inverterID,16);
         }
         // HTTP POST via Factory Reset button
         if (p->name() == PARAM_INPUT_8) {
-          Serial.println("Factory Reset initiated...");
+          debugln("Factory Reset initiated...");
           SPIFFS.remove("/config.json");
           SPIFFS.end();
           request->send(200, "text/plain", "Resetting to factory defaults and rebooting ESP. Connect to SSID OpenNETek to start initial setup.");
           delay(1000);
           ESP.restart();
         }
-        //Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
       }
     }
     // save the custom parameters to FS
     if (SPIFFS.begin()) {
 
-      Serial.println("saving config");
+      debugln("saving config");
       DynamicJsonBuffer jsonBuffer;
       JsonObject& json = jsonBuffer.createObject();
       json["wifi_ssid"] = ssid;
@@ -913,13 +926,15 @@ void setup()
       File configFile = SPIFFS.open("/config.json", "w");
       if (!configFile) {
         // config file cannot be opened for writing
-        Serial.println("failed to open config file for writing");
+        debugln("failed to open config file for writing");
         request->send(200, "text/plain", "Failed to open config file for writing. Cannot save new configuration!");
       } else {
         // config file is opened for writing
         json.printTo(configFile);
         configFile.close();
-        json.printTo(Serial);
+        if(DEBUGING){
+          json.printTo(Serial);
+        } 
         SPIFFS.end();
           
         //end save
@@ -940,7 +955,9 @@ void setup()
   // Handle Web Server Events
   events.onConnect([](AsyncEventSourceClient *client){
     if(client->lastId()){
-      Serial.printf("Client reconnected! Last message ID that it got is: %u\n", client->lastId());
+      if(DEBUGING){
+        Serial.printf("Client reconnected! Last message ID that it got is: %u\n", client->lastId());
+      }
     }
     // send event with message "hello!", id current millis
     // and set reconnect delay to 1 second
@@ -967,6 +984,8 @@ void setup()
 //    {
 //        Serial.println("Could not set RF module to default settings");
 //    }
+  Serial.println("Setup finished ...");
+
 }
 
 uint32_t lastSendMillis = 0;
@@ -980,43 +999,43 @@ if (currentMillis - lastSendMillis > 4000)
   {
   lastSendMillis = currentMillis;
     
-  //digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-  Serial.print("Sending request now to InverterID ");
-  Serial.println(inverterID,16);
-  //WebSerial.print("Sending request now to InverterID (shown as as decimal) ");
-  //WebSerial.println(inverterID);
+  
+  debug("Sending request now to InverterID ");
+  debugln2(inverterID,16);
+  webdebug("Sending request now to InverterID (shown as as decimal) ");
+  webdebugln(inverterID);
 
   const NETSGPClient::InverterStatus status = pvclient.getStatus(inverterID);
   
   if (status.valid)
     {
-    //WebSerial.println("*********************************************");
-    //WebSerial.println("Received Inverter Status");
-    //WebSerial.print("Device (shown as decimal): ");
-    //WebSerial.println(inverterID);
-    //WebSerial.println("Status: " + String(status.state));
-    //WebSerial.println("DC_Voltage: " + String(status.dcVoltage) + "V");
-    //WebSerial.println("DC_Current: " + String(status.dcCurrent) + "A");
-    //WebSerial.println("DC_Power: " + String(status.dcPower) + "W");
-    //WebSerial.println("AC_Voltage: " + String(status.acVoltage) + "V");
-    //WebSerial.println("AC_Current: " + String(status.acCurrent) + "A");
-    //WebSerial.println("AC_Power: " + String(status.acPower) + "W");
-    //WebSerial.println("Power gen total: " + String(status.totalGeneratedPower));
-    //WebSerial.println("Temperature: " + String(status.temperature));
+    webdebugln("*********************************************");
+    webdebugln("Received Inverter Status");
+    webdebug("Device (shown as decimal): ");
+    webdebugln(inverterID);
+    webdebugln("Status: " + String(status.state));
+    webdebugln("DC_Voltage: " + String(status.dcVoltage) + "V");
+    webdebugln("DC_Current: " + String(status.dcCurrent) + "A");
+    webdebugln("DC_Power: " + String(status.dcPower) + "W");
+    webdebugln("AC_Voltage: " + String(status.acVoltage) + "V");
+    webdebugln("AC_Current: " + String(status.acCurrent) + "A");
+    webdebugln("AC_Power: " + String(status.acPower) + "W");
+    webdebugln("Power gen total: " + String(status.totalGeneratedPower));
+    webdebugln("Temperature: " + String(status.temperature));
     // print Status to Serial for Debug
-    Serial.println("*********************************************");
-    Serial.println("Received Inverter Status");
-    Serial.print("Device: ");
-    Serial.println(status.deviceID, HEX);
-    Serial.println("Status: " + String(status.state));
-    Serial.println("DC_Voltage: " + String(status.dcVoltage) + "V");
-    Serial.println("DC_Current: " + String(status.dcCurrent) + "A");
-    Serial.println("DC_Power: " + String(status.dcPower) + "W");
-    Serial.println("AC_Voltage: " + String(status.acVoltage) + "V");
-    Serial.println("AC_Current: " + String(status.acCurrent) + "A");
-    Serial.println("AC_Power: " + String(status.acPower) + "W");
-    Serial.println("Power gen total: " + String(status.totalGeneratedPower));
-    Serial.println("Temperature: " + String(status.temperature));
+    debugln("*********************************************");
+    debugln("Received Inverter Status");
+    debug("Device: ");
+    debugln2(status.deviceID, 16);
+    debugln("Status: " + String(status.state));
+    debugln("DC_Voltage: " + String(status.dcVoltage) + "V");
+    debugln("DC_Current: " + String(status.dcCurrent) + "A");
+    debugln("DC_Power: " + String(status.dcPower) + "W");
+    debugln("AC_Voltage: " + String(status.acVoltage) + "V");
+    debugln("AC_Current: " + String(status.acCurrent) + "A");
+    debugln("AC_Power: " + String(status.acPower) + "W");
+    debugln("Power gen total: " + String(status.totalGeneratedPower));
+    debugln("Temperature: " + String(status.temperature));
     // Send Events to the Web Server with the Sensor Readings
     events.send("ping",NULL,millis());
     events.send(String(status.dcVoltage).c_str(),"DC_Voltage",millis());
@@ -1045,12 +1064,12 @@ if (currentMillis - lastSendMillis > 4000)
     // do the mqtt thing if MQTT server is given and Wifi is connected
     if ( sizeof(mqtt_server) && wifi_connected ) 
       {
-      //WebSerial.println("MQTT part beginning...");
+      webdebugln("MQTT part beginning...");
 
       if (!mqtt.connected()) 
         {
-        Serial.println("MQTT not connected. Reconecting...");
-        //WebSerial.print("MQTT not connected. Reconecting...");
+        debugln("MQTT not connected. Reconecting...");
+        webdebugln("MQTT not connected. Reconecting...");
 
         reconnect();
         }
@@ -1069,56 +1088,56 @@ if (currentMillis - lastSendMillis > 4000)
 
         char dcVoltage[8];
         dtostrf(dcVoltage1, 1, 2, dcVoltage);
-        //Serial.print("Mqtt-dcVoltage: ");
-        //Serial.println(dcVoltage);
+        debug("Mqtt-dcVoltage: ");
+        debugln(dcVoltage);
         mqtt.publish(get_mqtt_topic("/dcVoltage"), dcVoltage);
 
         char dcCurrent[8];
         dtostrf(dcCurrent1, 1, 2, dcCurrent);
-        //Serial.print("Mqtt-dcCurrent: ");
-        //Serial.println(dcCurrent);
+        debug("Mqtt-dcCurrent: ");
+        debugln(dcCurrent);
         mqtt.publish(get_mqtt_topic("/dcCurrent"), dcCurrent);
 
         char dcPower[8];
         dtostrf(dcPower1, 1, 2, dcPower);
-        //Serial.print("Mqtt-dcPower: ");
-        //Serial.println(dcPower);
+        debug("Mqtt-dcPower: ");
+        debugln(dcPower);
         mqtt.publish(get_mqtt_topic("/dcPower"), dcPower);
 
         char acVoltage[8];
         dtostrf(acVoltage1, 1, 2, acVoltage);
-        //Serial.print("Mqtt-acVoltage: ");
-        //Serial.println(acVoltage);
+        debug("Mqtt-acVoltage: ");
+        debugln(acVoltage);
         mqtt.publish(get_mqtt_topic("/acVoltage"), acVoltage);
 
         char acCurrent[8];
         dtostrf(acCurrent1, 1, 2, acCurrent);
-        //Serial.print("Mqtt-acCurrent: ");
-        //Serial.println(acCurrent);
+        debug("Mqtt-acCurrent: ");
+        debugln(acCurrent);
         mqtt.publish(get_mqtt_topic("/acCurrent"), acCurrent);
 
         char acPower[8];
         dtostrf(acPower1, 1, 2, acPower);
-        //Serial.print("Mqtt-acPower: ");
-        //Serial.println(acPower);
+        debug("Mqtt-acPower: ");
+        debugln(acPower);
         mqtt.publish(get_mqtt_topic("/acPower"), acPower);
 
         char tempString[8];
         dtostrf(temperature, 1, 2, tempString);
-        //Serial.print("Mqtt-Temperature: ");
-        //Serial.println(tempString);
+        debug("Mqtt-Temperature: ");
+        debugln(tempString);
         mqtt.publish(get_mqtt_topic("/temperature"), tempString);
 
         char totalGeneratedPower[8];
         dtostrf(totalGeneratedPower1, 1, 2, totalGeneratedPower);
-        //Serial.print("Mqtt-totalGeneratedPower: ");
-        //Serial.println(totalGeneratedPower);
+        debug("Mqtt-totalGeneratedPower: ");
+        debugln(totalGeneratedPower);
         mqtt.publish(get_mqtt_topic("/totalGeneratedPower"), totalGeneratedPower);
 
         char state[8];
         dtostrf(state1, 1, 2, state);
-        //Serial.print("Mqtt-state: ");
-        //Serial.println(state);
+        debug("Mqtt-state: ");
+        debugln(state);
         mqtt.publish(get_mqtt_topic("/state"), state);
         
         }
@@ -1127,11 +1146,11 @@ if (currentMillis - lastSendMillis > 4000)
     }
   else
     {
-    Serial.print("Received no Inverter Status from ");
-    Serial.println(inverterID,16);
+    debug("Received no Inverter Status from ");
+    debugln2(inverterID,16);
 
-    //WebSerial.print("Received no Inverter Status from (ID printed with base10) ");
-    //WebSerial.println(inverterID);
+    webdebug("Received no Inverter Status from (ID printed with base10) ");
+    webdebugln(inverterID);
     
     }
   }
