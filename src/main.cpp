@@ -1,17 +1,53 @@
 #include <FS.h>
 #include <string.h>
+
+#ifdef ESP8266
+#else
 #include <SPIFFS.h>
+#endif
+
 #include <NETSGPClient.h>
 #include <Arduino.h>
+
+
+#ifdef ESP8266
+#include <ESP8266WiFi.h>
+#else
 #include <WiFi.h>
+#include <esp_wifi.h>
+#endif
+
+
 #include <WiFiClient.h>
-#include <WiFiManager.h>
+
+#include <ESPAsync_WiFiManager.h>
+
+#ifdef ESP8266
+#include <ESPAsyncTCP.h>
+#else
 #include <AsyncTCP.h>
+#endif
+
+
+
 #include <ESPAsyncWebServer.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h> 
 #include <AsyncElegantOTA.h>
+
+
+#ifdef ESP8266
+#include <ESP8266mDNS.h>
+#else
 #include <ESPmDNS.h>
+#endif
+
+
+// to disable brownout detection
+//#include "soc/soc.h"
+//#include "soc/rtc_cntl_reg.h"
+
+
 #define LED 2
 #define DEBUGING 0
 #define WEBSERIAL 0
@@ -38,6 +74,8 @@
 
 //Options start
 
+bool ledpinon = false;
+
 // Add your MQTT Broker Data:
 char mqtt_server[40];     //mqtt Broker ip
 uint16_t mqtt_port;       //mqtt Broker port
@@ -47,12 +85,16 @@ char mqtt_topic[20];      //mqtt main topic of this Inverter
 
 uint32_t inverterID = 0; // will contain the identifier of your inverter (see label on inverter, but be aware that its in hex!)
 
-// Hostname of the ESP32 itself
+// Hostname of the ESP itself
 char hostname[20];
 
 // WiFi variables for config HTTP POST.
 String ssid;
 String pass;
+
+// for the loop to not run as fast as possible but every X seconds
+uint32_t lastSendMillis = 0;
+
 
 // Proper Wifi Managment starts here. 
 // Copied with small changes from https://github.com/espressif/arduino-esp32/blob/master/libraries/WiFi/examples/WiFiIPv6/WiFiIPv6.ino
@@ -68,7 +110,25 @@ void wifiOnDisconnect(){
 
 
 void WiFiEvent(WiFiEvent_t event){
+    
+    #ifdef ESP8266
+      switch(event) {
+        case WIFI_EVENT_STAMODE_GOT_IP:
+            Serial.println("WiFi connected");
+            Serial.println("IP address: ");
+            Serial.println(WiFi.localIP());
+            break;
+        case WIFI_EVENT_STAMODE_DISCONNECTED:
+            wifi_connected = false;
+            wifiOnDisconnect();
+            break;
+        default:
+            break;
+      }
+    #else
     switch(event) {
+
+    
 
         case ARDUINO_EVENT_WIFI_AP_START:
             //can set ap hostname here
@@ -107,6 +167,8 @@ void WiFiEvent(WiFiEvent_t event){
         default:
             break;
     }
+    #endif
+    
 }
 
 
@@ -169,11 +231,18 @@ char* get_mqtt_topic(const char* subdir){
 
 #ifdef ESP32C3
         // Code to be compiled for ESP32C3
-        constexpr const uint8_t RX_PIN = 9; /// RX pin 
-        constexpr const uint8_t TX_PIN = 10; /// TX pin 
-        #define clientSerial Serial1 /// ESP32C3 does not have Serial2. Serial1 should work on GPIO9 and 10.
+        constexpr const uint8_t RX_PIN = 6; /// RX pin 
+        constexpr const uint8_t TX_PIN = 7; /// TX pin
+        #define clientSerial Serial1 /// ESP32C3 does not have Serial2. Serial1 should work on GPIO6 and 7.
+#endif
 
-
+#ifdef ESP8266
+        // Code to be compiled for ESP8266
+        // Using Serial.swap to use D7(RX) and D8(TX) for UART0.
+        // This effectively puts the only available usable UART to Ports D7 and D8 after boot. 
+        // So Serial can be used for clean Application Usage. Debugging output on Serial during boot is done on D9 (RX) and D10 (TX).
+        // This makes Debugging AND being connected to live Hardware hard/impossible since they have to use the same UART.
+        #define clientSerial Serial/// ESP8266  
 #endif
 
 
@@ -293,16 +362,33 @@ void recvMsg(uint8_t *data, size_t len){
 void do_wifi_config(const unsigned long &timeout){
   bool config_changed = false;
   
-  WiFiManager wifiManager;
+  
+  // Use this to default DHCP hostname to ESP8266-XXXXXX or ESP32-XXXXXX
+  //ESPAsyncWiFiManager ESPAsyncwifiManager(&webServer, &dnsServer);
+  // Use this to personalize DHCP hostname (RFC952 conformed)
+  
+  //Local intialization. Once its business is done, there is no need to keep it around
+  AsyncWebServer tempwebServer(80);
+
+
+  #ifdef ESP8266
+  //DNSServer dnsServer;
+  ESPAsync_WiFiManager wifiManager(&tempwebServer, NULL);
+  #else
+  ESPAsync_WiFiManager wifiManager(&tempwebServer, NULL);
+  #endif
+
+
   // uncomment to delete WiFi settings after each Reset.
   wifiManager.resetSettings();
   wifiManager.setDebugOutput(true);
 
-  WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
-  WiFiManagerParameter custom_mqtt_port("port", "mqtt port", "1883", 6);
-  WiFiManagerParameter custom_mqtt_user("user", "mqtt user", mqtt_user, 32);
-  WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 32);
-  WiFiManagerParameter custom_inverterID("InverterID", "InverterID",String(inverterID, 16).c_str() , 8); // as printed on the label of the inverter which is in Hex
+  ESPAsync_WMParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
+  ESPAsync_WMParameter custom_mqtt_port("port", "mqtt port", "1883", 6);
+  ESPAsync_WMParameter custom_mqtt_user("user", "mqtt user", mqtt_user, 32);
+  ESPAsync_WMParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 32);
+  ESPAsync_WMParameter custom_inverterID("InverterID", "InverterID",String(inverterID, 16).c_str() , 9); // as printed on the label of the inverter which is in Hex  
+  
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
   wifiManager.addParameter(&custom_mqtt_user);
@@ -312,6 +398,7 @@ void do_wifi_config(const unsigned long &timeout){
   if (timeout > 0){
     // timeout shall be set
     wifiManager.setConfigPortalTimeout(timeout);
+    
 
     // This is an "if" and not a "while" to let the timeout stop WiFiManager and continue. 
     // Usecase: WiFi-config correct but not reachable right now.
@@ -329,9 +416,7 @@ void do_wifi_config(const unsigned long &timeout){
         }
     }
 
-  
-  
-  if (ssid == wifiManager.getWiFiSSID() && pass == wifiManager.getWiFiPass()) {
+  if (ssid == wifiManager.getSSID() && pass == wifiManager.getPW()) {
       // didn't get new Wifi credentials
       debugln("Saved credentials are the same as the set from WifiManager");
     }
@@ -339,8 +424,8 @@ void do_wifi_config(const unsigned long &timeout){
       // got new Wifi config
       debugln("Saved credentials are different from the set from WifiManager");
       config_changed = true;
-      ssid = wifiManager.getWiFiSSID();
-      pass = wifiManager.getWiFiPass();
+      ssid = wifiManager.getSSID();
+      pass = wifiManager.getPW();
     }
   
 
@@ -370,8 +455,9 @@ void do_wifi_config(const unsigned long &timeout){
   if (!configFile) {
     debugln("failed to open config file for writing");
   }
-
-  json.printTo(Serial);
+  if(DEBUGING){
+    json.printTo(Serial);
+  }
   json.printTo(configFile);
   configFile.close();
   debugln("config.json saved - restarting with new config.");
@@ -499,7 +585,7 @@ const char config_html[] PROGMEM = R"rawliteral(
                   <label for="pass">Password</label>
                 </div>
                 <div class="table-cell">
-                  <input type="password" id="pass" name="pass"><br>
+                  <input type="password" id="pass" name="pass" value="nochange"><br>
                 </div>
               </div>
             </div>
@@ -596,7 +682,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 </head>
 <body>
   <div class="topnav">
-    <h1>OpenNETek</h1>
+    <h1>OpenNETek 4.0</h1>
   </div>
     <div class="menu">
     <a href="/config"><i class="fa-solid fa-gear" style="color:#e1e437;"></i></a>
@@ -702,23 +788,52 @@ if (!!window.EventSource) {
 
 void setup()
 {
+  //WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector //didn't fix it
+  // set GPIO9 to high so that brownout doesn't lead to bootloader mode
+  //gpio_set_level(GPIO_NUM_9, 1); //didn't fix it
+
+  #if (DEBUGING == 1) 
+    pinMode(LED, OUTPUT);
+  #endif
+
   Serial.begin(9600);
-  Serial.println("Setup starting ...");
+  #ifdef ESP8266
+  #endif
+  debugln("Setup starting ...");
 
+  #ifdef ESP8266
+  clientSerial.begin(9600, SERIAL_8N1);
+  // Code to be compiled for ESP8266
+  // Using Serial.swap to use D7(RX) and D8(TX) for UART0.
+  // This effectively makes Bootup output of Serial end up on D9(RX) and D10(TX)
+  // So Serial can be used for Application Usage afterwards. But not for Debug Output.
+  Serial.swap();
+    #if (DEBUGING == 1) 
+      // For Debugging we need the Serial Output on the default Pins (which is also USB)
+    Serial.swap();
+    #endif
+  #else
   clientSerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
-  //delay(1000); // candidate for removal. delays are evil
-
-  #ifdef ESP32WROOM
-    // saving Power on ESP32 WROOM since startup was unreliable without that
-    // ESP32C3 is anyways running at 160MHz
-    setCpuFrequencyMhz(160);
   #endif
   
-  esp_err_t err;
-  err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  if (err == !ESP_OK) {
-    debugln("ERROR: Could not prevent persistant storage of Wifi Credentials in NVS.");
-  }
+  #ifdef ESP32WROOM
+    // saving Power on ESP32 WROOM since startup was unreliable without that
+    setCpuFrequencyMhz(160);
+  #endif
+    #ifdef ESP32C3
+    // saving Power on ESP32C3
+    setCpuFrequencyMhz(80);
+  #endif
+  
+  #ifdef ESP8266
+    // prevent: 'esp_err_t' was not declared in this scope during ESP8266 build
+  #else
+    esp_err_t err;
+    err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    if (err == !ESP_OK) {
+      debugln("ERROR: Could not prevent persistant storage of Wifi Credentials in NVS.");
+    }
+  #endif
 
   // Config for all bug wifi-ssid and wifi-password is saved in filesystem
   // If no config file is there, wifimanager is started to create one and restart the ESP.
@@ -744,7 +859,9 @@ void setup()
         configFile.readBytes(buf.get(), size);
         DynamicJsonBuffer jsonBuffer;
         JsonObject& json = jsonBuffer.parseObject(buf.get());
-        json.printTo(Serial);
+        if (DEBUGING){
+          json.printTo(Serial);
+        }
         if (json.success()) {
           debugln("\nparsed json");
           ssid = json["wifi_ssid"].as<char*>();
@@ -807,7 +924,12 @@ void setup()
     
     if (i==30){
       // waited already 30 seconds, maybe WiFI-config is just not working. Offering a change through WiFiManager, rebooting afterwards
-      WiFi.removeEvent(WiFiEvent);
+
+      #ifdef ESP8266
+        // prevent: error: 'class ESP8266WiFiClass' has no member named 'removeEvent'
+      #else
+        WiFi.removeEvent(WiFiEvent);
+      #endif
       WiFi.disconnect(false);
       do_wifi_config(600);
     }
@@ -815,21 +937,34 @@ void setup()
   }
   // we get here only when WiFi is connected. yay.
   wifi_connected = true; // wasn't set by the event yet, since that's not yet started
-
+  debugln('! Connected !');
   // Start WiFi Monitoring
   WiFi.onEvent(WiFiEvent);
-  // only STA mode needed
-  WiFi.mode(WIFI_MODE_STA);
+
+  #ifdef ESP8266
+    // prevent: error: 'WIFI_MODE_STA' was not declared in this scope; did you mean 'WIFI_AP_STA'?
+  #else
+    // only STA mode needed
+    WiFi.mode(WIFI_MODE_STA);
+  #endif
+  
 
   strcpy(hostname,mqtt_topic);
   
   // convert OpenNETek/<inverterID> to OpenNETek-<inverterID>
   hostname[9]='-';
+  debug("hostname is: \"");
+  debug(hostname);
+  debugln("\"");
 
   if (!MDNS.begin(hostname)) {
     debugln("Error setting up MDNS responder!");
+    // crashes ESP8266
+    //webdebugln("Error setting up MDNS responder!");
   }
   debugln("mDNS responder started");
+  // crashes ESP8266
+  //webdebugln("mDNS responder started");
 
 
   #if WEBSERIAL == 1
@@ -864,9 +999,14 @@ void setup()
         }
         // HTTP POST Wifi password value
         if (p->name() == PARAM_INPUT_2) {
-          pass = p->value().c_str();
-          debug("Password set to: ");
-          debugln(pass);
+          String nochange = "nochange";
+          nochange = p->value().c_str();
+          if (nochange != "nochange") {
+            pass = nochange;
+            debug("Password set to: ");
+            debugln(pass);
+          }
+          
         }
         // HTTP POST MQTT server value
         if (p->name() == PARAM_INPUT_3) {
@@ -970,7 +1110,7 @@ void setup()
 
   server.begin();
 
-  if ( sizeof(mqtt_server) ) {
+  if ( strlen(mqtt_server) ) {
     mqtt.setServer(mqtt_server, mqtt_port);
     mqtt.setCallback(callback);
    (mqtt.connect(hostname, mqtt_user, mqtt_password));
@@ -979,27 +1119,39 @@ void setup()
   
 
 
-    // Make sure the RF module is set to the correct settings
-//    if (!pvclient.setDefaultRFSettings())
-//    {
-//        Serial.println("Could not set RF module to default settings");
-//    }
-  Serial.println("Setup finished ...");
+  lastSendMillis = millis();
+
+  debugln("Setup finished ...");
 
 }
 
-uint32_t lastSendMillis = 0;
 
 
 
 void loop()
 {
+
+  #ifdef ESP8266
+    // otherwise mdns didn'twork on ESP8266
+    MDNS.update();
+  #endif
+
+
 const uint32_t currentMillis = millis();
 if (currentMillis - lastSendMillis > 4000)
   {
   lastSendMillis = currentMillis;
-    
   
+  #if DEBUGING == 1
+  if (ledpinon) {
+    digitalWrite(LED,LOW);
+    ledpinon = false;  
+  } else {
+    digitalWrite(LED,HIGH);
+    ledpinon = true;  
+  }
+  #endif
+
   debug("Sending request now to InverterID ");
   debugln2(inverterID,16);
   webdebug("Sending request now to InverterID (shown as as decimal) ");
@@ -1062,7 +1214,7 @@ if (currentMillis - lastSendMillis > 4000)
 
 
     // do the mqtt thing if MQTT server is given and Wifi is connected
-    if ( sizeof(mqtt_server) && wifi_connected ) 
+    if ( strlen(mqtt_server) && wifi_connected ) 
       {
       webdebugln("MQTT part beginning...");
 
